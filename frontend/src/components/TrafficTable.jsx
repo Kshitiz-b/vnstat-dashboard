@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Clock, Calendar, Download, Upload, BarChart, LineChart, Activity, ChevronDown, ChevronUp } from 'lucide-react';
+import { toDateFromVnstat } from '../utils/timezone';
 
 const TrafficTable = ({ title, icon, data, headers, initialCount }) => {
   const [expanded, setExpanded] = useState(false);
@@ -69,11 +70,7 @@ const formatBytes = (bytes) => {
 const HourlyTable = ({ data }) => {
   const sortedData = [...data]
     .filter((row) => row.rx || row.tx)
-    .sort((a, b) => {
-      const dateA = new Date(a.date.year, a.date.month - 1, a.date.day, a.hour || 0);
-      const dateB = new Date(b.date.year, b.date.month - 1, b.date.day, b.hour || 0);
-      return dateB - dateA; // descending
-    })
+    .sort((a, b) => toDateFromVnstat(b.date, b.time) - toDateFromVnstat(a.date, a.time))
     .slice(0, 24); // last 24 hours
 
   return (
@@ -85,7 +82,7 @@ const HourlyTable = ({ data }) => {
         {
           label: 'Date',
           render: (row) =>
-            new Date(row.date.year, row.date.month - 1, row.date.day).toLocaleDateString('en-US', {
+            toDateFromVnstat(row.date, row.time).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
               day: '2-digit',
@@ -94,13 +91,7 @@ const HourlyTable = ({ data }) => {
         {
           label: 'Time',
           render: (row) =>
-            new Date(
-              row.date.year,
-              row.date.month - 1,
-              row.date.day,
-              row.time?.hour ?? 0,
-              row.time?.minute ?? 0
-            ).toLocaleTimeString('en-US', {
+            toDateFromVnstat(row.date, row.time).toLocaleTimeString('en-US', {
               hour: '2-digit',
               minute: '2-digit',
               hour12: true,
@@ -138,7 +129,7 @@ const DailyTable = ({ data }) => (
     headers={[
       { label: 'Date',
           render: (row) =>
-            new Date(row.date.year, row.date.month - 1, row.date.day).toLocaleDateString('en-US', {
+            toDateFromVnstat(row.date, row.time).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
               day: '2-digit',
@@ -173,7 +164,7 @@ const MonthlyTable = ({ data }) => (
     initialCount={10}
     headers={[
       { label: 'Month', render: (row) =>
-            new Date(row.date.year, row.date.month - 1).toLocaleDateString('en-US', {
+            toDateFromVnstat(row.date, row.time).toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
             }), },
