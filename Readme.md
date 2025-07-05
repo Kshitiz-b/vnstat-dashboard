@@ -1,4 +1,8 @@
-# ![Logo](preview/logo.png) VNStat Dashboard
+<div align="center">
+  <img src="preview/logo.png" alt="Logo">
+</div>
+
+# VNStat Dashboard
 
 A sleek, responsive, containerized web dashboard to visualize network interface statistics using [`vnstat`](https://github.com/vergoh/vnstat).
 
