@@ -40,7 +40,6 @@ const TABS = [
 
 const INTERFACES = [
   { id: 'eth0', label: 'Ethernet (eth0)', icon: Network },
-  { id: 'eth1', label: 'Ethernet (eth1)', icon: Network },
   { id: 'wlan0', label: 'Wifi (wlan0)', icon: Network },
   { id: 'docker0', label: 'Docker (docker0)', icon: Server },
   { id: 'tailscale0', label: 'Tailscale (tailscale0)', icon: Network }

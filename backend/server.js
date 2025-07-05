@@ -3,7 +3,7 @@ const { exec } = require('child_process');
 const path = require('path');
 const app = express();
 
-const ALLOWED_INTERFACES = ['eth0', 'docker0', 'tailscale0'];
+const ALLOWED_INTERFACES = ['eth0', 'wlan0', 'docker0', 'tailscale0'];
 
 const FRONTEND_DIR = process.env.FRONTEND_DIR || 'frontend-build';
 app.use(express.static(path.join(__dirname, '..', FRONTEND_DIR)));

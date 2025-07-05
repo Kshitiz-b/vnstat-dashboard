@@ -1,4 +1,4 @@
-# 📊 VNStat Dashboard
+# ![Logo](preview/logo.png) VNStat Dashboard
 
 A sleek, responsive, containerized web dashboard to visualize network interface statistics using [`vnstat`](https://github.com/vergoh/vnstat).
 
@@ -13,7 +13,7 @@ Mainly build for ARMv8/AMD64 devices.
 - Responsive, dark-mode friendly UI
 - Dockerized for portability
 - Uses a single container for backend + frontend
-- Automatically detects and serves from interfaces like `eth0`, `docker0`, and `tailscale0`
+- Automatically detects and serves from interfaces like `eth0`, `wlan0`, `docker0`, and `tailscale0`
 
 ---
 
@@ -97,7 +97,7 @@ docker run -d \
   kshitizb/vnstat-dashboard
 ```
 
-> ✅ Use this option if `vnstat` in the container needs to directly access the host's network interfaces like `eth0`, `docker0`, `tailscale0`.
+> ✅ Use this option if `vnstat` in the container needs to directly access the host's network interfaces like `eth0`, `wlan0`, `docker0`, `tailscale0`.
 
 ### 🧭 **Access the Dashboard**
 
@@ -134,6 +134,7 @@ http://localhost:8050
 - **Frontend + API served on same port**: `8050`
 - Backend API: `/api/vnstat/:interface`
   - Example: `/api/vnstat/eth0`
+  - Example: `/api/vnstat/wlan0`
 
 ---
 
@@ -157,7 +158,7 @@ http://localhost:8050
 
 - Change default interfaces in `backend/server.js`:
   ```js
-  const ALLOWED_INTERFACES = ['eth0', 'docker0', 'tailscale0'];
+  const ALLOWED_INTERFACES = ['eth0', 'wlan0', 'docker0', 'tailscale0'];
   ```
 
 - Edit UI/theme in `frontend/src/App.js` and Tailwind styles
