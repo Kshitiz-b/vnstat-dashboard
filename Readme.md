@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="preview/logo.png" alt="Logo">
+  <img src="preview/logo.png" alt="Logo" width=500px>
 </div>
 
 # VNStat Dashboard
