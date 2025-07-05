@@ -53,8 +53,8 @@ Make sure to use `--privileged` so that `vnstat` inside the container can access
 docker run -d \
   --name vnstat-dashboard \
   --privileged \
-  --network host \
-  vnstat-dashboard
+  -p 8050:8050 \
+  kshitizb/vnstat-dashboard
 ```
 
 ### 4. Access the Dashboard
@@ -77,7 +77,7 @@ docker pull kshitizb/vnstat-dashboard
 
 > 🔁 This pulls the latest image from Docker Hub.
 
-### 🚀 **Run the Container (with Port Mapping)**
+### 🚀 **Run the Container**
 
 Use this if you want to access the app via `http://localhost:8050`:
 
@@ -88,20 +88,6 @@ docker run -d \
   -p 8050:8050 \
   kshitizb/vnstat-dashboard
 ```
-
-### 🌐 **Run the Container (with Host Networking)**
-
-Use this on **Linux** if you prefer the container to use the host’s network directly:
-
-```bash
-docker run -d \
-  --name vnstat-dashboard \
-  --privileged \
-  --network host \
-  kshitizb/vnstat-dashboard
-```
-
-> ✅ Use this option if `vnstat` in the container needs to directly access the host's network interfaces like `eth0`, `wlan0`, `docker0`, `tailscale0`.
 
 ### 🧭 **Access the Dashboard**
 

@@ -69,7 +69,15 @@ function App() {
   const fivemin = traffic && traffic.fiveminute ? traffic.fiveminute.slice(-10).reverse() : [];
 
   const getLabel = (row, type) => {
-    if (type === 'hourly') return `${String(row.time.hour).padStart(2, '0')}:00`;
+    if (type === 'hourly') {
+      const date = new Date(row.date.year, row.date.month - 1, row.date.day, row.time.hour);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        hour12: true
+      });
+    }
     if (type === 'daily') return formatDate(row.date);
     if (type === 'monthly') return formatMonthYear(row.date.year, row.date.month);
     if (type === 'yearly') return `${row.date.year}`;
@@ -119,7 +127,7 @@ function App() {
             <Github class="h-5 w-5" />
             <span>Kshitiz-b</span>
           </a>
-          
+
         </div>
 
         {/* Interface Selector */}
@@ -294,7 +302,7 @@ function App() {
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart
                     data={graphData(
-                      tab === "Hourly" ? hourly :
+                      tab === "Hourly" ? hourly.slice(-24) :
                         tab === "Daily" ? daily :
                           tab === "Monthly" ? monthly :
                             tab === "Yearly" ? yearly : [],
