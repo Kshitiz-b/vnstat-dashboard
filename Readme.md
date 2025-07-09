@@ -6,7 +6,6 @@
 
 A sleek, responsive, containerized web dashboard to visualize network interface statistics using [`vnstat`](https://github.com/vergoh/vnstat).
 
-Mainly build for ARMv8/AMD64 devices.
 
 ---
 
