@@ -53,6 +53,7 @@ docker run -d \
   --name vnstat-dashboard \
   --privileged \
   -p 8050:8050 \
+  -v /var/lib/vnstat:/var/lib/vnstat \
   kshitizb/vnstat-dashboard
 ```
 
@@ -85,6 +86,7 @@ docker run -d \
   --name vnstat-dashboard \
   --privileged \
   -p 8050:8050 \
+  -v /var/lib/vnstat:/var/lib/vnstat \
   kshitizb/vnstat-dashboard
 ```
 
@@ -156,6 +158,6 @@ http://localhost:8050
 
 ## 📝 License
 
-MIT © 2025 Kshitiz
+MIT © [Kshitiz](https://github.com/Kshitiz-b)
 
 ---
