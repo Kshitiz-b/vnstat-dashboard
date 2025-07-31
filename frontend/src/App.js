@@ -4,6 +4,8 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
 import { Network, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
+import { HourlyTable, DailyTable, MonthlyTable, YearlyTable } from './components/TrafficTable';
+
 
 function formatDate({ year, month, day }) {
   const date = new Date(year, month - 1, day);
@@ -62,11 +64,40 @@ function App() {
 
   const ifaceInfo = data && data.interfaces ? data.interfaces[0] : null;
   const traffic = ifaceInfo ? ifaceInfo.traffic : null;
-  const hourly = traffic && traffic.hour ? traffic.hour : [];
-  const daily = traffic && traffic.day ? traffic.day : [];
-  const monthly = traffic && traffic.month ? traffic.month : [];
-  const yearly = traffic && traffic.year ? traffic.year : [];
-  const fivemin = traffic && traffic.fiveminute ? traffic.fiveminute.slice(-10).reverse() : [];
+  const hourly = traffic && traffic.hour
+    ? [...traffic.hour]
+      .filter(row => row.time && typeof row.time.hour === 'number')
+      .sort((a, b) => {
+        const dateA = new Date(a.date.year, a.date.month - 1, a.date.day, a.time.hour);
+        const dateB = new Date(b.date.year, b.date.month - 1, b.date.day, b.time.hour);
+        return dateB - dateA;
+      })
+      .slice(0, 24)
+    : [];
+
+  const daily = traffic && traffic.day
+    ? [...traffic.day].sort((a, b) => {
+      const dateA = new Date(a.date.year, a.date.month - 1, a.date.day);
+      const dateB = new Date(b.date.year, b.date.month - 1, b.date.day);
+      return dateB - dateA;
+    })
+    : [];
+
+  const monthly = traffic && traffic.month
+    ? [...traffic.month].sort((a, b) => {
+      const dateA = new Date(a.date.year, a.date.month - 1);
+      const dateB = new Date(b.date.year, b.date.month - 1);
+      return dateB - dateA;
+    })
+    : [];
+
+  const yearly = traffic && traffic.year
+    ? [...traffic.year].sort((a, b) => b.date.year - a.date.year)
+    : [];
+
+  const fivemin = traffic && traffic.fiveminute
+    ? traffic.fiveminute.slice(-10).reverse()
+    : [];
 
   const getLabel = (row, type) => {
     if (type === 'hourly') {
@@ -297,19 +328,19 @@ function App() {
                 <TrendingUp className="h-6 w-6 text-blue-400" />
                 {tab} Traffic Analysis
               </h2>
-
               <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart
                     data={graphData(
-                      tab === "Hourly" ? hourly.slice(-24) :
-                        tab === "Daily" ? daily :
-                          tab === "Monthly" ? monthly :
-                            tab === "Yearly" ? yearly : [],
+                      tab === "Hourly" ? [...hourly.slice(-24)].reverse() :
+                        tab === "Daily" ? [...daily].reverse() :
+                          tab === "Monthly" ? [...monthly].reverse() :
+                            tab === "Yearly" ? [...yearly].reverse() : [],
                       tab.toLowerCase()
                     )}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   >
+
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                     <XAxis
                       dataKey="name"
@@ -352,11 +383,11 @@ function App() {
                   <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400 mb-1">Download:</span>
-                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(daily[daily.length - 1].rx)}</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(daily[0].rx)}</span>
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400 mb-1">Upload:</span>
-                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(daily[daily.length - 1].tx)}</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(daily[0].tx)}</span>
                     </div>
                   </div>
                 </div>
@@ -368,16 +399,38 @@ function App() {
                   <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400">Download:</span>
-                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(monthly[monthly.length - 1].rx)}</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(monthly[0].rx)}</span>
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400">Upload:</span>
-                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(monthly[monthly.length - 1].tx)}</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(monthly[0].tx)}</span>
                     </div>
                   </div>
 
                 </div>
               )}
+
+              {tab === 'Yearly' && yearly.length > 0 && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-blue-400">This Year's Usage</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(yearly[0].rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(yearly[0].tx)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div>
+                {tab === 'Hourly' && <HourlyTable data={hourly} />}
+                {tab === 'Daily' && <DailyTable data={daily} />}
+                {tab === 'Monthly' && <MonthlyTable data={monthly} />}
+                {tab === 'Yearly' && <YearlyTable data={yearly} />}
+              </div>
             </div>
           )}
         </div>
