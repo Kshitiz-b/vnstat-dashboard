@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceArea
 } from 'recharts';
 import { Network, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
 import { HourlyTable, DailyTable, MonthlyTable, YearlyTable } from './components/TrafficTable';
@@ -30,6 +30,32 @@ function formatBytes(bytes) {
 function formatMonthYear(year, month) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[month - 1]} ${year}`;
+}
+
+function parseDateStr(str, isEnd) {
+  if (!str) return null;
+  if (str.includes('T')) return new Date(str);
+  if (/^\d{4}$/.test(str)) {
+    const y = parseInt(str);
+    return isEnd ? new Date(y, 12, 0, 23, 59, 59) : new Date(y, 0, 1);
+  }
+  if (/^\d{4}-\d{2}$/.test(str)) {
+    const [y, m] = str.split('-').map(Number);
+    return isEnd ? new Date(y, m, 0, 23, 59, 59) : new Date(y, m - 1, 1);
+  }
+  return isEnd ? new Date(str + 'T23:59:59') : new Date(str + 'T00:00:00');
+}
+
+function filterByDateRange(data, range, getEntryDate) {
+  if (!range || (!range.from && !range.to)) return data;
+  const fromDate = parseDateStr(range.from, false);
+  const toDate = parseDateStr(range.to, true);
+  return data.filter(row => {
+    const d = getEntryDate(row);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  });
 }
 
 const TABS = [
@@ -67,6 +93,17 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [interfaces, setInterfaces] = useState([]);
   const [ifaceLoading, setIfaceLoading] = useState(true);
+
+  const [dateRanges, setDateRanges] = useState({
+    hourly: { from: '', to: '' },
+    daily: { from: '', to: '' },
+    monthly: { from: '', to: '' },
+    yearly: { from: '', to: '' },
+  });
+  const [dragVisualFrom, setDragVisualFrom] = useState(null);
+  const [dragVisualTo, setDragVisualTo] = useState(null);
+  const dragRef = useRef({ from: null, to: null });
+  const chartDataRef = useRef([]);
 
   // Persist config
   useEffect(() => {
@@ -122,6 +159,44 @@ function App() {
 
   }, [selected]);
 
+  useEffect(() => {
+    const handleUp = () => {
+      const { from, to } = dragRef.current;
+      if (from != null && to != null && from !== to) {
+        const data = chartDataRef.current;
+        const i1 = Math.min(from, to);
+        const i2 = Math.max(from, to);
+        const startRow = data[i1];
+        const endRow = data[i2];
+        if (startRow && endRow) {
+          const tabKey = tab.toLowerCase();
+          const pad = (n) => String(n).padStart(2, '0');
+          const toISO = (date, time) => {
+            if (tabKey === 'hourly')
+              return `${date.year}-${pad(date.month)}-${pad(date.day)}T${pad(time?.hour || 0)}:${pad(time?.minute || 0)}`;
+            if (tabKey === 'monthly')
+              return `${date.year}-${pad(date.month)}`;
+            if (tabKey === 'yearly')
+              return `${date.year}`;
+            return `${date.year}-${pad(date.month)}-${pad(date.day)}`;
+          };
+          setDateRanges(prev => ({
+            ...prev,
+            [tabKey]: {
+              from: toISO(startRow._date, startRow._time),
+              to: toISO(endRow._date, endRow._time),
+            }
+          }));
+        }
+      }
+      dragRef.current = { from: null, to: null };
+      setDragVisualFrom(null);
+      setDragVisualTo(null);
+    };
+    window.addEventListener('mouseup', handleUp);
+    return () => window.removeEventListener('mouseup', handleUp);
+  }, [tab]);
+
   const ifaceInfo = data && data.interfaces ? data.interfaces[0] : null;
   const traffic = ifaceInfo ? ifaceInfo.traffic : null;
   const hourly = traffic && traffic.hour
@@ -175,12 +250,54 @@ function App() {
     return '';
   };
 
-  const graphData = (rows, type) => rows.map(row => ({
-    name: getLabel(row, type),
-    RX: row.rx ? row.rx : 0,
-    TX: row.tx ? row.tx : 0,
-    Total: row.rx && row.tx ? row.rx + row.tx : 0,
+  const getHourlyDate = (row) => new Date(row.date.year, row.date.month - 1, row.date.day, row.time.hour);
+  const getDailyDate = (row) => new Date(row.date.year, row.date.month - 1, row.date.day);
+  const getMonthlyDate = (row) => new Date(row.date.year, row.date.month - 1, 1);
+  const getYearlyDate = (row) => new Date(row.date.year, 0, 1);
+
+  const filteredHourly = filterByDateRange(hourly, dateRanges.hourly, getHourlyDate);
+  const filteredDaily = filterByDateRange(daily, dateRanges.daily, getDailyDate);
+  const filteredMonthly = filterByDateRange(monthly, dateRanges.monthly, getMonthlyDate);
+  const filteredYearly = filterByDateRange(yearly, dateRanges.yearly, getYearlyDate);
+
+  const currentFiltered = tab === 'Hourly' ? filteredHourly :
+    tab === 'Daily' ? filteredDaily :
+      tab === 'Monthly' ? filteredMonthly :
+        tab === 'Yearly' ? filteredYearly : [];
+  const currentRangeTotal = currentFiltered.reduce((a, r) => ({
+    rx: a.rx + (r.rx || 0), tx: a.tx + (r.tx || 0)
+  }), { rx: 0, tx: 0 });
+  const hasActiveFilter = !!(dateRanges[tab.toLowerCase()]?.from || dateRanges[tab.toLowerCase()]?.to);
+
+  const tabData = tab === "Hourly" ? [...filteredHourly.slice(-24)].reverse() :
+    tab === "Daily" ? [...filteredDaily].reverse() :
+      tab === "Monthly" ? [...filteredMonthly].reverse() :
+        tab === "Yearly" ? [...filteredYearly].reverse() : [];
+
+  const currentGraphData = tabData.map(row => ({
+    name: getLabel(row, tab.toLowerCase()),
+    RX: row.rx || 0,
+    TX: row.tx || 0,
+    _date: row.date,
+    _time: row.time,
   }));
+
+  useEffect(() => {
+    chartDataRef.current = currentGraphData;
+  }, [currentGraphData]);
+
+  const refAreaFrom = dragVisualFrom != null && dragVisualTo != null && currentGraphData.length > 0
+    ? currentGraphData[Math.max(0, Math.min(dragVisualFrom, dragVisualTo))]?.name
+    : undefined;
+  const refAreaTo = dragVisualFrom != null && dragVisualTo != null && currentGraphData.length > 0
+    ? currentGraphData[Math.min(currentGraphData.length - 1, Math.max(dragVisualFrom, dragVisualTo))]?.name
+    : undefined;
+
+  const isFilterDisabled =
+    (tab === 'Hourly' && hourly.length <= 1) ||
+    (tab === 'Daily' && daily.length <= 1) ||
+    (tab === 'Monthly' && monthly.length <= 1) ||
+    (tab === 'Yearly' && yearly.length <= 1);
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -428,17 +545,127 @@ function App() {
                 <TrendingUp className="h-6 w-6 text-blue-400" />
                 {tab} Traffic Analysis
               </h2>
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+
+              <div className={`date-range-bar${isFilterDisabled ? ' disabled' : ''}`}>
+                <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                {tab === 'Hourly' ? (
+                  <>
+                    <input
+                      type="datetime-local"
+                      className="date-range-input"
+                      value={dateRanges.hourly?.from || ''}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, hourly: { ...prev.hourly, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="datetime-local"
+                      className="date-range-input"
+                      value={dateRanges.hourly?.to || ''}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, hourly: { ...prev.hourly, to: e.target.value } }))}
+                    />
+                  </>
+                ) : tab === 'Monthly' ? (
+                  <>
+                    <input
+                      type="month"
+                      className="date-range-input"
+                      value={dateRanges.monthly?.from || ''}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, monthly: { ...prev.monthly, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="month"
+                      className="date-range-input"
+                      value={dateRanges.monthly?.to || ''}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, monthly: { ...prev.monthly, to: e.target.value } }))}
+                    />
+                  </>
+                ) : tab === 'Yearly' ? (
+                  <>
+                    <input
+                      type="number"
+                      className="date-range-input date-range-year"
+                      value={dateRanges.yearly?.from || ''}
+                      min={yearly.length > 0 ? Math.min(...yearly.map(r => r.date.year)) : 2000}
+                      max={yearly.length > 0 ? Math.max(...yearly.map(r => r.date.year)) : new Date().getFullYear()}
+                      disabled={isFilterDisabled}
+                      placeholder="From"
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, yearly: { ...prev.yearly, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="number"
+                      className="date-range-input date-range-year"
+                      value={dateRanges.yearly?.to || ''}
+                      min={yearly.length > 0 ? Math.min(...yearly.map(r => r.date.year)) : 2000}
+                      max={yearly.length > 0 ? Math.max(...yearly.map(r => r.date.year)) : new Date().getFullYear()}
+                      disabled={isFilterDisabled}
+                      placeholder="To"
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, yearly: { ...prev.yearly, to: e.target.value } }))}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="date"
+                      className="date-range-input"
+                      value={dateRanges.daily?.from || ''}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, daily: { ...prev.daily, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="date"
+                      className="date-range-input"
+                      value={dateRanges.daily?.to || ''}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, daily: { ...prev.daily, to: e.target.value } }))}
+                    />
+                  </>
+                )}
+                {isFilterDisabled ? (
+                  <span className="date-range-hint">Not enough data to filter</span>
+                ) : (
+                  <button
+                    className="date-range-btn date-range-btn-reset"
+                    onClick={() => {
+                      setDateRanges(prev => ({
+                        ...prev,
+                        [tab.toLowerCase()]: { from: '', to: '' }
+                      }));
+                      dragRef.current = { from: null, to: null };
+                      setDragVisualFrom(null);
+                      setDragVisualTo(null);
+                    }}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <div className={`bg-gray-800 rounded-lg p-6 border border-gray-700${dragVisualFrom != null ? ' select-none' : ''}`}>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart
-                    data={graphData(
-                      tab === "Hourly" ? [...hourly.slice(-24)].reverse() :
-                        tab === "Daily" ? [...daily].reverse() :
-                          tab === "Monthly" ? [...monthly].reverse() :
-                            tab === "Yearly" ? [...yearly].reverse() : [],
-                      tab.toLowerCase()
-                    )}
+                    data={currentGraphData}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    onMouseDown={(e) => {
+                      if (!isFilterDisabled && e?.activeTooltipIndex != null && currentGraphData.length > 0) {
+                        dragRef.current.from = e.activeTooltipIndex;
+                        dragRef.current.to = e.activeTooltipIndex;
+                        setDragVisualFrom(e.activeTooltipIndex);
+                        setDragVisualTo(e.activeTooltipIndex);
+                      }
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isFilterDisabled && dragRef.current.from != null && e?.activeTooltipIndex != null) {
+                        dragRef.current.to = e.activeTooltipIndex;
+                        setDragVisualTo(e.activeTooltipIndex);
+                      }
+                    }}
                   >
 
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -472,64 +699,146 @@ function App() {
                       dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
                       activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
                     />
+                    {refAreaFrom && refAreaTo && (
+                      <ReferenceArea
+                        x1={refAreaFrom}
+                        x2={refAreaTo}
+                        fill="#3b82f6"
+                        fillOpacity={0.15}
+                        stroke="#3b82f6"
+                        strokeOpacity={0.3}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
               {/* Summary Stats */}
-              {tab === 'Daily' && daily.length > 0 && (
+              {tab === 'Hourly' && hasActiveFilter && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <h4 className="text-lg font-semibold mb-2 text-blue-400">Today's Usage</h4>
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400 mb-1">Download:</span>
-                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(daily[0].rx)}</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400 mb-1">Upload:</span>
-                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(daily[0].tx)}</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {tab === 'Daily' && daily.length > 0 && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-semibold mb-2 text-blue-400">Today's Usage</h4>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                          <span className="text-sm text-gray-400 mb-1">Download:</span>
+                          <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(daily[0].rx)}</span>
+                        </div>
+                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                          <span className="text-sm text-gray-400 mb-1">Upload:</span>
+                          <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(daily[0].tx)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {hasActiveFilter && (
+                      <div className="flex-1 range-total-divider">
+                        <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                            <span className="text-sm text-gray-400 mb-1">Download:</span>
+                            <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                          </div>
+                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                            <span className="text-sm text-gray-400 mb-1">Upload:</span>
+                            <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {tab === 'Monthly' && monthly.length > 0 && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <h4 className="text-lg font-semibold mb-2 text-blue-400">This Month's Usage</h4>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                      <span className="text-sm text-gray-400">Download:</span>
-                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(monthly[0].rx)}</span>
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-semibold mb-2 text-blue-400">This Month's Usage</h4>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                          <span className="text-sm text-gray-400">Download:</span>
+                          <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(monthly[0].rx)}</span>
+                        </div>
+                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                          <span className="text-sm text-gray-400">Upload:</span>
+                          <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(monthly[0].tx)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                      <span className="text-sm text-gray-400">Upload:</span>
-                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(monthly[0].tx)}</span>
-                    </div>
+                    {hasActiveFilter && (
+                      <div className="flex-1 range-total-divider">
+                        <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                            <span className="text-sm text-gray-400">Download:</span>
+                            <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                          </div>
+                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                            <span className="text-sm text-gray-400">Upload:</span>
+                            <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
                 </div>
               )}
 
               {tab === 'Yearly' && yearly.length > 0 && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <h4 className="text-lg font-semibold mb-2 text-blue-400">This Year's Usage</h4>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                      <span className="text-sm text-gray-400">Download:</span>
-                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(yearly[0].rx)}</span>
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-semibold mb-2 text-blue-400">This Year's Usage</h4>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                          <span className="text-sm text-gray-400">Download:</span>
+                          <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(yearly[0].rx)}</span>
+                        </div>
+                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                          <span className="text-sm text-gray-400">Upload:</span>
+                          <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(yearly[0].tx)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                      <span className="text-sm text-gray-400">Upload:</span>
-                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(yearly[0].tx)}</span>
-                    </div>
+                    {hasActiveFilter && (
+                      <div className="flex-1 range-total-divider">
+                        <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                            <span className="text-sm text-gray-400">Download:</span>
+                            <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                          </div>
+                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                            <span className="text-sm text-gray-400">Upload:</span>
+                            <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
               <div>
-                {tab === 'Hourly' && <HourlyTable data={hourly} />}
-                {tab === 'Daily' && <DailyTable data={daily} />}
-                {tab === 'Monthly' && <MonthlyTable data={monthly} />}
-                {tab === 'Yearly' && <YearlyTable data={yearly} />}
+                {tab === 'Hourly' && <HourlyTable data={filteredHourly} />}
+                {tab === 'Daily' && <DailyTable data={filteredDaily} />}
+                {tab === 'Monthly' && <MonthlyTable data={filteredMonthly} />}
+                {tab === 'Yearly' && <YearlyTable data={filteredYearly} />}
               </div>
             </div>
           )}

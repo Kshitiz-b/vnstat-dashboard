@@ -660,6 +660,120 @@ body {
   stroke: #374151;
 }
 
+/* Date Range Filter */
+.date-range-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.date-range-input {
+  background: #111827;
+  border: 1px solid #4b5563;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  color: #e5e7eb;
+  font-size: 0.875rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.date-range-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.date-range-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.date-range-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.date-range-year {
+  width: 6rem;
+  -moz-appearance: textfield;
+}
+
+.date-range-year::-webkit-inner-spin-button,
+.date-range-year::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.date-range-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.date-range-bar.disabled {
+  opacity: 0.6;
+}
+
+/* Range Total Card */
+.range-total-divider {
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.range-total-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, rgba(167, 139, 250, 0.4), transparent);
+  border-radius: 1px;
+}
+
+.date-range-separator {
+  color: #6b7280;
+  font-size: 1.125rem;
+  user-select: none;
+  line-height: 1;
+}
+
+.date-range-btn {
+  padding: 0.4rem 0.875rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s;
+}
+
+.date-range-btn-reset {
+  background: #374151;
+  color: #d1d5db;
+}
+
+.date-range-btn-reset:hover {
+  background: #4b5563;
+}
+
+.select-none {
+  user-select: none;
+  cursor: crosshair;
+}
+
+.select-none * {
+  cursor: crosshair !important;
+}
+
 /* Error States */
 .error-message {
   color: #ef4444;
