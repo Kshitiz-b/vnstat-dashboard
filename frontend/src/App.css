@@ -47,6 +47,98 @@ body {
   gap: 4px;
 }
 
+/* Overview card layout */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.overview-card {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+.traffic-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  height: 100%;
+}
+
+.traffic-detail-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem;
+  height: 100%;
+  min-width: 0;
+}
+
+.time-overview-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  height: 100%;
+}
+
+.overview-subcard {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 0.375rem;
+  min-width: 0;
+}
+
+.traffic-total-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.traffic-detail-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  min-width: 0;
+}
+
+.traffic-detail-card {
+  flex: 1 1 0;
+}
+
+.time-detail-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1rem 1.25rem;
+  min-width: 0;
+}
+
+.overview-total-value,
+.overview-detail-value,
+.overview-date-value {
+  white-space: nowrap;
+}
+
+.overview-detail-value {
+  min-width: max-content;
+}
+
+.estimate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.estimate-card {
+  min-width: 0;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -80,6 +172,29 @@ body {
 
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+@keyframes estimateDotIn {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.estimate-dot {
+  animation: estimateDotIn 1.5s ease-out both;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* Gradient Text */
@@ -255,6 +370,20 @@ body {
 
   .chart-container {
     padding: 1rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .overview-grid,
+  .traffic-overview-layout,
+  .time-overview-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .estimate-grid {
+    grid-template-columns: 1fr;
   }
 }
 

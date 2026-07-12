@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Calendar, Download, Upload, BarChart, LineChart } from 'lucide-react';
+import { Clock, Calendar, Download, Upload, BarChart, LineChart, Activity } from 'lucide-react';
 
 const TrafficTable = ({ title, icon, data, headers }) => (
   <div>
@@ -100,6 +100,12 @@ const HourlyTable = ({ data }) => {
           className: 'font-medium text-blue-400',
           render: (row) => formatBytes(row.tx),
         },
+        {
+          label: 'Total',
+          icon: <Activity className="h-4 w-4 text-yellow-400" />,
+          className: 'font-medium text-yellow-400',
+          render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
+        },
       ]}
     />
   );
@@ -130,6 +136,12 @@ const DailyTable = ({ data }) => (
         className: 'font-medium text-blue-400',
         render: (row) => formatBytes(row.tx),
       },
+      {
+        label: 'Total',
+        icon: <Activity className="h-4 w-4 text-yellow-400" />,
+        className: 'font-medium text-yellow-400',
+        render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
+      },
     ]}
   />
 );
@@ -157,6 +169,12 @@ const MonthlyTable = ({ data }) => (
         className: 'font-medium text-blue-400',
         render: (row) => formatBytes(row.tx),
       },
+      {
+        label: 'Total',
+        icon: <Activity className="h-4 w-4 text-yellow-400" />,
+        className: 'font-medium text-yellow-400',
+        render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
+      },
     ]}
   />
 );
@@ -179,6 +197,12 @@ const YearlyTable = ({ data }) => (
         icon: <Upload className="h-4 w-4 text-blue-400" />,
         className: 'font-medium text-blue-400',
         render: (row) => formatBytes(row.tx),
+      },
+      {
+        label: 'Total',
+        icon: <Activity className="h-4 w-4 text-yellow-400" />,
+        className: 'font-medium text-yellow-400',
+        render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
       },
     ]}
   />
