@@ -3,96 +3,13 @@ import './App.css';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
-import { Network, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
+import { Settings, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
 import { HourlyTable, DailyTable, MonthlyTable, YearlyTable } from './components/TrafficTable';
-
-
-function formatDate({ year, month, day }) {
-  const date = new Date(year, month - 1, day);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate().toString().padStart(2, '0')}, ${date.getFullYear()}`;
-}
-
-function formatTime({ hour, minute }) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024, dm = 2;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-function formatMonthYear(year, month) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[month - 1]} ${year}`;
-}
-
-function periodSeconds(row, period) {
-  if (!row?.date) return 0;
-
-  const { year, month } = row.date;
-
-  if (period === 'hour') {
-    return 3600;
-  }
-
-  if (period === 'day') {
-    return 86400;
-  }
-
-  if (period === 'month') {
-    return Math.round((new Date(year, month, 1) - new Date(year, month - 1, 1)) / 1000);
-  }
-
-  if (period === 'year') {
-    return Math.round((new Date(year + 1, 0, 1) - new Date(year, 0, 1)) / 1000);
-  }
-
-  return 0;
-}
-
-function isCurrentEstimatePeriod(row, period, updated) {
-  const duration = periodSeconds(row, period);
-  if (!row?.timestamp || !duration || !updated) return false;
-  return updated >= row.timestamp && updated < row.timestamp + duration;
-}
-
-function getTrafficEstimate(row, period, ifaceInfo) {
-  if (!row?.timestamp || !ifaceInfo?.updated?.timestamp) return null;
-  if (!row.rx || !row.tx) return null;
-
-  const updated = ifaceInfo.updated.timestamp;
-  if (!isCurrentEstimatePeriod(row, period, updated)) return null;
-
-  const created = ifaceInfo.created?.timestamp || 0;
-  const periodStart = row.timestamp;
-  let elapsed = updated - periodStart;
-  let duration = periodSeconds(row, period);
-
-  if (created > periodStart) {
-    const offset = created - periodStart;
-    if (elapsed > offset && duration > offset) {
-      elapsed -= offset;
-      duration -= offset;
-    }
-  }
-
-  if (elapsed <= 0 || duration <= 0) return null;
-
-  const rx = Math.trunc((row.rx / elapsed) * duration);
-  const tx = Math.trunc((row.tx / elapsed) * duration);
-
-  return {
-    rx,
-    tx,
-    total: rx + tx,
-  };
-}
+import EstimateCard from './components/EstimateCard';
+import EstimateDot from './components/EstimateDot';
+import SettingsModal from './components/SettingsModal';
+import { calculateTrafficEstimate } from './utils/trafficEstimate';
+import { formatDate, formatTime, formatBytes, formatMonthYear } from './utils/format';
 
 const TABS = [
   { id: 'Summary', label: 'Summary', icon: Activity },
@@ -108,6 +25,7 @@ function App() {
   const CONFIG_KEY = 'vnstat_config';
   const LAST_TAB_KEY = 'vnstat_last_tab';
   const LAST_INTERFACE_KEY = 'vnstat_last_interface';
+  const DISPLAY_SETTINGS_KEY = 'vnstat_display_settings';
 
   // Config state (source of truth)
   const [config, setConfig] = useState(() => {
@@ -125,11 +43,59 @@ function App() {
     return localStorage.getItem(LAST_TAB_KEY) || DEFAULT_TAB;
   });
 
+  // Display settings
+  const [displaySettings, setDisplaySettings] = useState(() => {
+    const defaultSettings = {
+      showEstimates: false,
+      graphSeries: {
+        rx: true,
+        tx: true,
+        total: true,
+        estimateRx: false,
+        estimateTx: false,
+        estimateTotal: false,
+      },
+    };
+
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(DISPLAY_SETTINGS_KEY));
+
+      if (!stored) {
+        return defaultSettings;
+      }
+
+      return {
+        ...defaultSettings,
+        ...stored,
+        graphSeries: {
+          ...defaultSettings.graphSeries,
+          ...(stored.graphSeries || {}),
+        },
+      };
+    } catch {
+      return defaultSettings;
+    }
+  });
+
+  const updateGraphSeries = (key, value) => {
+    setDisplaySettings(prev => ({
+      ...prev,
+      graphSeries: {
+        ...prev.graphSeries,
+        [key]: value,
+      },
+    }));
+  };
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState(() => localStorage.getItem(LAST_INTERFACE_KEY) || '');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [interfaces, setInterfaces] = useState([]);
   const [ifaceLoading, setIfaceLoading] = useState(true);
+  const estimatesEnabled = displaySettings.showEstimates;
+
 
   // Persist config
   useEffect(() => {
@@ -158,6 +124,14 @@ function App() {
       else setTab(DEFAULT_TAB);
     }
   }, [config]);
+
+  // Persist view settings
+  useEffect(() => {
+    localStorage.setItem(
+      DISPLAY_SETTINGS_KEY,
+      JSON.stringify(displaySettings)
+    );
+  }, [displaySettings]);
 
   useEffect(() => {
     fetch('/api/interfaces')
@@ -232,10 +206,10 @@ function App() {
     ? traffic.fiveminute.slice(-10).reverse()
     : [];
 
-  const hourlyEstimate = hourly.length > 0 ? getTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
-  const dailyEstimate = daily.length > 0 ? getTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
-  const monthlyEstimate = monthly.length > 0 ? getTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
-  const yearlyEstimate = yearly.length > 0 ? getTrafficEstimate(yearly[0], 'year', ifaceInfo) : null;
+  const hourlyEstimate = hourly.length > 0 ? calculateTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
+  const dailyEstimate = daily.length > 0 ? calculateTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
+  const monthlyEstimate = monthly.length > 0 ? calculateTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
+  const yearlyEstimate = yearly.length > 0 ? calculateTrafficEstimate(yearly[0], 'year', ifaceInfo) : null;
 
   const getLabel = (row, type) => {
     if (type === 'hourly') {
@@ -266,6 +240,78 @@ function App() {
       estimateTotal: isEstimateTarget ? estimate.total : null,
     };
   });
+
+  const graphSeries = [
+    {
+      dataKey: 'RX',
+      enabled: displaySettings.graphSeries.rx,
+      stroke: '#10B981',
+      strokeWidth: 3,
+      dot: { fill: '#10B981', strokeWidth: 2, r: 4 },
+      activeDot: { r: 6, stroke: '#10B981', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'TX',
+      enabled: displaySettings.graphSeries.tx,
+      stroke: '#3B82F6',
+      strokeWidth: 3,
+      dot: { fill: '#3B82F6', strokeWidth: 2, r: 4 },
+      activeDot: { r: 6, stroke: '#3B82F6', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'Total',
+      enabled: displaySettings.graphSeries.total,
+      stroke: '#F97316',
+      strokeWidth: 3,
+      dot: { fill: '#F97316', strokeWidth: 2, r: 4 },
+      activeDot: { r: 6, stroke: '#F97316', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'estimateRX',
+      enabled: estimatesEnabled && displaySettings.graphSeries.estimateRx,
+      stroke: '#F59E0B',
+      strokeWidth: 0,
+      dot: (props) => (
+        <EstimateDot
+          {...props}
+          fill="#F59E0B"
+          stroke="#FDE68A"
+          r={6}
+        />
+      ),
+      activeDot: { r: 8, stroke: '#FDE68A', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'estimateTX',
+      enabled: estimatesEnabled && displaySettings.graphSeries.estimateTx,
+      stroke: '#C084FC',
+      strokeWidth: 0,
+      dot: (props) => (
+        <EstimateDot
+          {...props}
+          fill="#C084FC"
+          stroke="#E9D5FF"
+          r={6}
+        />
+      ),
+      activeDot: { r: 8, stroke: '#E9D5FF', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'estimateTotal',
+      enabled: estimatesEnabled && displaySettings.graphSeries.estimateTotal,
+      stroke: '#FACC15',
+      strokeWidth: 0,
+      dot: (props) => (
+        <EstimateDot
+          {...props}
+          fill="#FACC15"
+          stroke="#FEF3C7"
+          r={7}
+        />
+      ),
+      activeDot: { r: 9, stroke: '#FEF3C7', strokeWidth: 2 },
+    },
+  ];
 
   const getChartRows = () => {
     if (tab === 'Hourly') return [...hourly.slice(-24)].reverse();
@@ -301,6 +347,8 @@ function App() {
       estimateTotal: '#FACC15',
     };
 
+
+
     if (active && visiblePayload.length) {
       return (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
@@ -327,35 +375,7 @@ function App() {
     return null;
   };
 
-  const EstimateDot = ({ cx, cy, value, fill, stroke, r = 6 }) => {
-    if (cx == null || cy == null || value == null) return null;
 
-    return (
-      <circle
-        className="estimate-dot"
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={2}
-      />
-    );
-  };
-
-  const EstimateCard = ({ title, estimate, accent = 'text-yellow-400' }) => {
-    if (!estimate) return null;
-
-    return (
-      <div className="estimate-card bg-gray-900 rounded-md p-4 border border-gray-700">
-        <div className="text-sm text-gray-400 mb-1">{title}</div>
-        <div className={`text-xl font-bold ${accent}`}>{formatBytes(estimate.total)}</div>
-        <div className="text-sm text-gray-400 mt-1">
-          RX {formatBytes(estimate.rx)} / TX {formatBytes(estimate.tx)}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-white mb-8">
@@ -367,74 +387,44 @@ function App() {
           </h1>
           <p className="text-gray-400">Monitor your network interface statistics in real-time</p>
         </div>
-        <div class="github">
-          <a class="github-icon" href="https://github.com/Kshitiz-b/vnstat-dashboard" target="_blank" rel="noreferrer">
-            <Github class="h-5 w-5" />
+        <div className="mb-4 github">
+          <a className="github-icon" href="https://github.com/Kshitiz-b/vnstat-dashboard" target="_blank" rel="noreferrer">
+            <Github className="h-5 w-5" />
             <span>Kshitiz-b</span>
           </a>
 
+          <button
+            onClick={() => setSettingsOpen(prev => !prev)}
+            className={`settings-button ${settingsOpen ? "settings-button-active" : ""
+              }`}
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Interface + View Controls */}
-        <div className="mb-8 flex justify-center w-full">
-          <div className="flex items-center justify-center gap-4 border border-gray-700 rounded-lg bg-gray-900 px-3 py-1">
+        <SettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
 
-            {/* Interface Section */}
-            <div className="flex items-center gap-3 px-5 py-3">
-              <Network className="h-4 w-4 text-gray-500 shrink-0" />
-              <span className="text-[11px] uppercase tracking-wider font-medium text-gray-500 whitespace-nowrap">
-                Interface
-              </span>
-              {ifaceLoading ? (
-                <span className="text-gray-400 text-sm">Loading…</span>
-              ) : (
-                <select
-                  value={selected}
-                  onChange={e => setSelected(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={ifaceLoading || interfaces.length === 0}
-                >
-                  {interfaces.length > 0 ? (
-                    interfaces.map(iface => (
-                      <option key={iface} value={iface}>{iface}</option>
-                    ))
-                  ) : (
-                    <option disabled>No interfaces found</option>
-                  )}
-                </select>
-              )}
-            </div>
+          selected={selected}
+          setSelected={setSelected}
 
-            {/* View Section */}
-            <div className="flex items-center gap-3 px-5 py-3">
-              <Clock className="h-4 w-4 text-gray-500 shrink-0" />
-              <span className="text-[11px] uppercase tracking-wider font-medium text-gray-500 whitespace-nowrap">
-                View
-              </span>
-              <select
-                value={config.mode}
-                onChange={e => setConfig(prev => ({ ...prev, mode: e.target.value }))}
-                className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="last">Last view</option>
-                <option value="fixed">Fixed view</option>
-              </select>
+          interfaces={interfaces}
+          ifaceLoading={ifaceLoading}
 
-              {config.mode === 'fixed' && (
-                <select
-                  value={config.defaultTab}
-                  onChange={e => setConfig(prev => ({ ...prev, defaultTab: e.target.value }))}
-                  className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {TABS.map(t => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+          config={config}
+          setConfig={setConfig}
 
-          </div>
-        </div>
+          displaySettings={displaySettings}
+          setDisplaySettings={setDisplaySettings}
+
+          estimatesEnabled={estimatesEnabled}
+          updateGraphSeries={updateGraphSeries}
+
+          tabs={TABS}
+        />
 
         {/* Tab Navigation */}
         <div className="mb-8">
@@ -487,10 +477,10 @@ function App() {
                     <div className="traffic-overview-layout grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
                       <div className="overview-subcard traffic-total-card bg-gray-900 rounded-md p-5 border border-gray-700 flex flex-col justify-center">
                         <div className="flex items-center gap-2 mb-4">
-                          <Activity className="h-5 w-5 text-yellow-400 shrink-0" />
+                          <Activity className="h-5 w-5 text-orange-400 shrink-0" />
                           <span className="text-sm font-medium text-gray-400">Total Traffic</span>
                         </div>
-                        <div className="overview-total-value text-4xl font-bold text-yellow-400 leading-tight text-right">
+                        <div className="overview-total-value text-4xl font-bold text-orange-400 leading-tight text-right">
                           {formatBytes((traffic.total.rx || 0) + (traffic.total.tx || 0))}
                         </div>
                       </div>
@@ -529,10 +519,10 @@ function App() {
 
                       <div className="overview-subcard time-detail-card bg-gray-900 rounded-md p-4 border border-gray-700">
                         <div className="flex items-center gap-3 mb-4">
-                          <Clock className="h-5 w-5 text-orange-400 shrink-0" />
+                          <Clock className="h-5 w-5 text-blue-400 shrink-0" />
                           <span className="text-sm font-medium text-gray-400">Last Updated</span>
                         </div>
-                        <div className="overview-date-value text-lg font-semibold text-orange-400 leading-snug">
+                        <div className="overview-date-value text-lg font-semibold text-blue-400 leading-snug">
                           {formatDate(ifaceInfo.updated.date)}
                         </div>
                         <div className="text-sm text-gray-400 mt-1">
@@ -544,10 +534,10 @@ function App() {
                 </div>
               </div>
 
-              {(dailyEstimate || monthlyEstimate || yearlyEstimate) && (
+              {estimatesEnabled && (dailyEstimate || monthlyEstimate || yearlyEstimate) && (
                 <div className="mb-8">
                   <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-yellow-400" />
+                    <TrendingUp className="h-5 w-5 text-orange-400" />
                     Estimated Usage
                   </h3>
                   <div className="estimate-grid">
@@ -584,7 +574,7 @@ function App() {
                         </th>
                         <th className="text-left p-4 font-medium text-gray-300 border-b border-gray-700">
                           <div className="flex items-center gap-2">
-                            <Activity className="h-4 w-4 text-yellow-400" />
+                            <Activity className="h-4 w-4 text-orange-400" />
                             <span className="label-text">Total</span>
                           </div>
                         </th>
@@ -605,7 +595,7 @@ function App() {
                           <td className="p-4 border-b border-gray-800 font-medium text-blue-400">
                             {formatBytes(row.tx)}
                           </td>
-                          <td className="p-4 border-b border-gray-800 font-medium text-yellow-400">
+                          <td className="p-4 border-b border-gray-800 font-medium text-orange-400">
                             {formatBytes((row.rx || 0) + (row.tx || 0))}
                           </td>
                         </tr>
@@ -647,66 +637,21 @@ function App() {
                       width={80}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="RX"
-                      stroke="#10B981"
-                      strokeWidth={3}
-                      dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2 }}
-                      animationDuration={1500}
-                      animationEasing="ease-out"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="TX"
-                      stroke="#3B82F6"
-                      strokeWidth={3}
-                      dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
-                      animationDuration={1500}
-                      animationEasing="ease-out"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="Total"
-                      stroke="#F97316"
-                      strokeWidth={3}
-                      dot={{ fill: '#F97316', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, stroke: '#F97316', strokeWidth: 2 }}
-                      animationDuration={1500}
-                      animationEasing="ease-out"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="estimateRX"
-                      stroke="#F59E0B"
-                      strokeWidth={0}
-                      dot={(props) => <EstimateDot {...props} fill="#F59E0B" stroke="#FDE68A" r={6} />}
-                      activeDot={{ r: 8, stroke: '#FDE68A', strokeWidth: 2 }}
-                      animationDuration={1500}
-                      animationEasing="ease-out"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="estimateTX"
-                      stroke="#C084FC"
-                      strokeWidth={0}
-                      dot={(props) => <EstimateDot {...props} fill="#C084FC" stroke="#E9D5FF" r={6} />}
-                      activeDot={{ r: 8, stroke: '#E9D5FF', strokeWidth: 2 }}
-                      animationDuration={1500}
-                      animationEasing="ease-out"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="estimateTotal"
-                      stroke="#FACC15"
-                      strokeWidth={0}
-                      dot={(props) => <EstimateDot {...props} fill="#FACC15" stroke="#FEF3C7" r={7} />}
-                      activeDot={{ r: 9, stroke: '#FEF3C7', strokeWidth: 2 }}
-                      animationDuration={1500}
-                      animationEasing="ease-out"
-                    />
+                    {graphSeries
+                      .filter(series => series.enabled)
+                      .map(series => (
+                        <Line
+                          key={series.dataKey}
+                          type="monotone"
+                          dataKey={series.dataKey}
+                          stroke={series.stroke}
+                          strokeWidth={series.strokeWidth}
+                          dot={series.dot}
+                          activeDot={series.activeDot}
+                          animationDuration={1500}
+                          animationEasing="ease-out"
+                        />
+                      ))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -726,9 +671,9 @@ function App() {
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400 mb-1">Total:</span>
-                      <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes((daily[0].rx || 0) + (daily[0].tx || 0))}</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((daily[0].rx || 0) + (daily[0].tx || 0))}</span>
                     </div>
-                    {dailyEstimate && (
+                    {estimatesEnabled && dailyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                         <span className="text-sm text-gray-400 mb-1">Estimate:</span>
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
@@ -752,9 +697,9 @@ function App() {
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400">Total:</span>
-                      <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes((monthly[0].rx || 0) + (monthly[0].tx || 0))}</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((monthly[0].rx || 0) + (monthly[0].tx || 0))}</span>
                     </div>
-                    {monthlyEstimate && (
+                    {estimatesEnabled && monthlyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                         <span className="text-sm text-gray-400">Estimate:</span>
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(monthlyEstimate.total)}</span>
@@ -779,9 +724,9 @@ function App() {
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400">Total:</span>
-                      <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes((yearly[0].rx || 0) + (yearly[0].tx || 0))}</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((yearly[0].rx || 0) + (yearly[0].tx || 0))}</span>
                     </div>
-                    {yearlyEstimate && (
+                    {estimatesEnabled && yearlyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                         <span className="text-sm text-gray-400">Estimate:</span>
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(yearlyEstimate.total)}</span>

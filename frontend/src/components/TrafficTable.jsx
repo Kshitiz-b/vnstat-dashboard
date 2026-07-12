@@ -1,4 +1,3 @@
-import React from 'react';
 import { Clock, Calendar, Download, Upload, BarChart, LineChart, Activity } from 'lucide-react';
 
 const TrafficTable = ({ title, icon, data, headers }) => (
@@ -61,7 +60,7 @@ const HourlyTable = ({ data }) => {
   return (
     <TrafficTable
       title="Hourly Traffic"
-      icon={<Clock className="h-5 w-5 text-yellow-400" />}
+      icon={<Clock className="h-5 w-5 text-blue-400" />}
       data={sortedData}
       headers={[
         {
@@ -102,8 +101,8 @@ const HourlyTable = ({ data }) => {
         },
         {
           label: 'Total',
-          icon: <Activity className="h-4 w-4 text-yellow-400" />,
-          className: 'font-medium text-yellow-400',
+          icon: <Activity className="h-4 w-4 text-orange-400" />,
+          className: 'font-medium text-orange-400',
           render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
         },
       ]}
@@ -138,8 +137,8 @@ const DailyTable = ({ data }) => (
       },
       {
         label: 'Total',
-        icon: <Activity className="h-4 w-4 text-yellow-400" />,
-        className: 'font-medium text-yellow-400',
+        icon: <Activity className="h-4 w-4 text-orange-400" />,
+        className: 'font-medium text-orange-400',
         render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
       },
     ]}
@@ -171,8 +170,8 @@ const MonthlyTable = ({ data }) => (
       },
       {
         label: 'Total',
-        icon: <Activity className="h-4 w-4 text-yellow-400" />,
-        className: 'font-medium text-yellow-400',
+        icon: <Activity className="h-4 w-4 text-orange-400" />,
+        className: 'font-medium text-orange-400',
         render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
       },
     ]}
@@ -200,8 +199,8 @@ const YearlyTable = ({ data }) => (
       },
       {
         label: 'Total',
-        icon: <Activity className="h-4 w-4 text-yellow-400" />,
-        className: 'font-medium text-yellow-400',
+        icon: <Activity className="h-4 w-4 text-orange-400" />,
+        className: 'font-medium text-orange-400',
         render: (row) => formatBytes((row.rx || 0) + (row.tx || 0)),
       },
     ]}
