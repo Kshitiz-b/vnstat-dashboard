@@ -1,4 +1,3 @@
-import React from "react";
 
 const EstimateDot = ({ cx, cy, value, fill, stroke, r = 6 }) => {
     if (cx == null || cy == null || value == null) return null;
