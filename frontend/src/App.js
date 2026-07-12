@@ -5,94 +5,10 @@ import {
 } from 'recharts';
 import { Network, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
 import { HourlyTable, DailyTable, MonthlyTable, YearlyTable } from './components/TrafficTable';
-
-
-function formatDate({ year, month, day }) {
-  const date = new Date(year, month - 1, day);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate().toString().padStart(2, '0')}, ${date.getFullYear()}`;
-}
-
-function formatTime({ hour, minute }) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024, dm = 2;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-function formatMonthYear(year, month) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[month - 1]} ${year}`;
-}
-
-function periodSeconds(row, period) {
-  if (!row?.date) return 0;
-
-  const { year, month } = row.date;
-
-  if (period === 'hour') {
-    return 3600;
-  }
-
-  if (period === 'day') {
-    return 86400;
-  }
-
-  if (period === 'month') {
-    return Math.round((new Date(year, month, 1) - new Date(year, month - 1, 1)) / 1000);
-  }
-
-  if (period === 'year') {
-    return Math.round((new Date(year + 1, 0, 1) - new Date(year, 0, 1)) / 1000);
-  }
-
-  return 0;
-}
-
-function isCurrentEstimatePeriod(row, period, updated) {
-  const duration = periodSeconds(row, period);
-  if (!row?.timestamp || !duration || !updated) return false;
-  return updated >= row.timestamp && updated < row.timestamp + duration;
-}
-
-function getTrafficEstimate(row, period, ifaceInfo) {
-  if (!row?.timestamp || !ifaceInfo?.updated?.timestamp) return null;
-  if (!row.rx || !row.tx) return null;
-
-  const updated = ifaceInfo.updated.timestamp;
-  if (!isCurrentEstimatePeriod(row, period, updated)) return null;
-
-  const created = ifaceInfo.created?.timestamp || 0;
-  const periodStart = row.timestamp;
-  let elapsed = updated - periodStart;
-  let duration = periodSeconds(row, period);
-
-  if (created > periodStart) {
-    const offset = created - periodStart;
-    if (elapsed > offset && duration > offset) {
-      elapsed -= offset;
-      duration -= offset;
-    }
-  }
-
-  if (elapsed <= 0 || duration <= 0) return null;
-
-  const rx = Math.trunc((row.rx / elapsed) * duration);
-  const tx = Math.trunc((row.tx / elapsed) * duration);
-
-  return {
-    rx,
-    tx,
-    total: rx + tx,
-  };
-}
+import { calculateTrafficEstimate } from './utils/trafficEstimate';
+import { formatDate, formatTime, formatBytes, formatMonthYear } from './utils/format';
+import EstimateCard from './components/EstimateCard';
+import EstimateDot from './components/EstimateDot';
 
 const TABS = [
   { id: 'Summary', label: 'Summary', icon: Activity },
@@ -108,6 +24,7 @@ function App() {
   const CONFIG_KEY = 'vnstat_config';
   const LAST_TAB_KEY = 'vnstat_last_tab';
   const LAST_INTERFACE_KEY = 'vnstat_last_interface';
+  const DISPLAY_SETTINGS_KEY = 'vnstat_display_settings';
 
   // Config state (source of truth)
   const [config, setConfig] = useState(() => {
@@ -123,6 +40,21 @@ function App() {
   const [tab, setTab] = useState(() => {
     if (config.mode === 'fixed') return config.defaultTab;
     return localStorage.getItem(LAST_TAB_KEY) || DEFAULT_TAB;
+  });
+
+  // Display settings
+  const [displaySettings, setDisplaySettings] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(DISPLAY_SETTINGS_KEY));
+
+      return stored || {
+        showEstimates: false
+      };
+    } catch {
+      return {
+        showEstimates: false
+      };
+    }
   });
 
   const [selected, setSelected] = useState(() => localStorage.getItem(LAST_INTERFACE_KEY) || '');
@@ -158,6 +90,14 @@ function App() {
       else setTab(DEFAULT_TAB);
     }
   }, [config]);
+
+  // Persist view settings
+  useEffect(() => {
+    localStorage.setItem(
+      DISPLAY_SETTINGS_KEY,
+      JSON.stringify(displaySettings)
+    );
+  }, [displaySettings]);
 
   useEffect(() => {
     fetch('/api/interfaces')
@@ -232,10 +172,10 @@ function App() {
     ? traffic.fiveminute.slice(-10).reverse()
     : [];
 
-  const hourlyEstimate = hourly.length > 0 ? getTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
-  const dailyEstimate = daily.length > 0 ? getTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
-  const monthlyEstimate = monthly.length > 0 ? getTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
-  const yearlyEstimate = yearly.length > 0 ? getTrafficEstimate(yearly[0], 'year', ifaceInfo) : null;
+  const hourlyEstimate = hourly.length > 0 ? calculateTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
+  const dailyEstimate = daily.length > 0 ? calculateTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
+  const monthlyEstimate = monthly.length > 0 ? calculateTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
+  const yearlyEstimate = yearly.length > 0 ? calculateTrafficEstimate(yearly[0], 'year', ifaceInfo) : null;
 
   const getLabel = (row, type) => {
     if (type === 'hourly') {
@@ -327,36 +267,6 @@ function App() {
     return null;
   };
 
-  const EstimateDot = ({ cx, cy, value, fill, stroke, r = 6 }) => {
-    if (cx == null || cy == null || value == null) return null;
-
-    return (
-      <circle
-        className="estimate-dot"
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={2}
-      />
-    );
-  };
-
-  const EstimateCard = ({ title, estimate, accent = 'text-yellow-400' }) => {
-    if (!estimate) return null;
-
-    return (
-      <div className="estimate-card bg-gray-900 rounded-md p-4 border border-gray-700">
-        <div className="text-sm text-gray-400 mb-1">{title}</div>
-        <div className={`text-xl font-bold ${accent}`}>{formatBytes(estimate.total)}</div>
-        <div className="text-sm text-gray-400 mt-1">
-          RX {formatBytes(estimate.rx)} / TX {formatBytes(estimate.tx)}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gray-950 text-white mb-8">
       <div className="container mx-auto px-4 py-8 max-w-xl w-full">
@@ -433,6 +343,26 @@ function App() {
               )}
             </div>
 
+            {/* Display Settings*/}
+            <div className="flex items-center gap-3 px-5 py-3">
+              <label className="text-[11px] uppercase tracking-wider font-medium text-gray-500 whitespace-nowrap">
+                Display Settings
+              </label>
+
+              <label className="fbg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={displaySettings.showEstimates}
+                  onChange={(e) =>
+                    setDisplaySettings(prev => ({
+                      ...prev,
+                      showEstimates: e.target.checked
+                    }))
+                  }
+                />
+                Show Estimates
+              </label>
+            </div>
           </div>
         </div>
 
@@ -544,7 +474,7 @@ function App() {
                 </div>
               </div>
 
-              {(dailyEstimate || monthlyEstimate || yearlyEstimate) && (
+              {displaySettings.showEstimates && (dailyEstimate || monthlyEstimate || yearlyEstimate) && (
                 <div className="mb-8">
                   <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-yellow-400" />
@@ -728,7 +658,7 @@ function App() {
                       <span className="text-sm text-gray-400 mb-1">Total:</span>
                       <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes((daily[0].rx || 0) + (daily[0].tx || 0))}</span>
                     </div>
-                    {dailyEstimate && (
+                    {displaySettings.showEstimates && dailyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                         <span className="text-sm text-gray-400 mb-1">Estimate:</span>
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
@@ -754,7 +684,7 @@ function App() {
                       <span className="text-sm text-gray-400">Total:</span>
                       <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes((monthly[0].rx || 0) + (monthly[0].tx || 0))}</span>
                     </div>
-                    {monthlyEstimate && (
+                    {displaySettings.showEstimates && monthlyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                         <span className="text-sm text-gray-400">Estimate:</span>
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(monthlyEstimate.total)}</span>
@@ -781,7 +711,7 @@ function App() {
                       <span className="text-sm text-gray-400">Total:</span>
                       <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes((yearly[0].rx || 0) + (yearly[0].tx || 0))}</span>
                     </div>
-                    {yearlyEstimate && (
+                    {displaySettings.showEstimates && yearlyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                         <span className="text-sm text-gray-400">Estimate:</span>
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(yearlyEstimate.total)}</span>
