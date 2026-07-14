@@ -3,34 +3,13 @@ import './App.css';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceArea
 } from 'recharts';
-import { Network, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
+import { Settings, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
 import { HourlyTable, DailyTable, MonthlyTable, YearlyTable } from './components/TrafficTable';
-
-
-function formatDate({ year, month, day }) {
-  const date = new Date(year, month - 1, day);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate().toString().padStart(2, '0')}, ${date.getFullYear()}`;
-}
-
-function formatTime({ hour, minute }) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${period}`;
-}
-
-function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024, dm = 2;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-function formatMonthYear(year, month) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[month - 1]} ${year}`;
-}
+import EstimateCard from './components/EstimateCard';
+import EstimateDot from './components/EstimateDot';
+import SettingsModal from './components/SettingsModal';
+import { calculateTrafficEstimate } from './utils/trafficEstimate';
+import { formatDate, formatTime, formatBytes, formatMonthYear } from './utils/format';
 
 function parseDateStr(str, isEnd) {
   if (!str) return null;
@@ -71,6 +50,8 @@ function App() {
   const DEFAULT_TAB = 'Summary';
   const CONFIG_KEY = 'vnstat_config';
   const LAST_TAB_KEY = 'vnstat_last_tab';
+  const LAST_INTERFACE_KEY = 'vnstat_last_interface';
+  const DISPLAY_SETTINGS_KEY = 'vnstat_display_settings';
 
   // Config state (source of truth)
   const [config, setConfig] = useState(() => {
@@ -88,11 +69,59 @@ function App() {
     return localStorage.getItem(LAST_TAB_KEY) || DEFAULT_TAB;
   });
 
-  const [selected, setSelected] = useState('');
+  // Display settings
+  const [displaySettings, setDisplaySettings] = useState(() => {
+    const defaultSettings = {
+      showEstimates: false,
+      graphSeries: {
+        rx: true,
+        tx: true,
+        total: true,
+        estimateRx: false,
+        estimateTx: false,
+        estimateTotal: false,
+      },
+    };
+
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(DISPLAY_SETTINGS_KEY));
+
+      if (!stored) {
+        return defaultSettings;
+      }
+
+      return {
+        ...defaultSettings,
+        ...stored,
+        graphSeries: {
+          ...defaultSettings.graphSeries,
+          ...(stored.graphSeries || {}),
+        },
+      };
+    } catch {
+      return defaultSettings;
+    }
+  });
+
+  const updateGraphSeries = (key, value) => {
+    setDisplaySettings(prev => ({
+      ...prev,
+      graphSeries: {
+        ...prev.graphSeries,
+        [key]: value,
+      },
+    }));
+  };
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selected, setSelected] = useState(() => localStorage.getItem(LAST_INTERFACE_KEY) || '');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [interfaces, setInterfaces] = useState([]);
   const [ifaceLoading, setIfaceLoading] = useState(true);
+  const estimatesEnabled = displaySettings.showEstimates;
+
 
   const [dateRanges, setDateRanges] = useState({
     hourly: { from: '', to: '' },
@@ -115,6 +144,13 @@ function App() {
     localStorage.setItem(LAST_TAB_KEY, tab);
   }, [tab]);
 
+  // Persist last selected interface
+  useEffect(() => {
+    if (selected) {
+      localStorage.setItem(LAST_INTERFACE_KEY, selected);
+    }
+  }, [selected]);
+
   // React to config changes (MAIN FIX)
   useEffect(() => {
     if (config.mode === 'fixed') {
@@ -125,6 +161,14 @@ function App() {
       else setTab(DEFAULT_TAB);
     }
   }, [config]);
+
+  // Persist view settings
+  useEffect(() => {
+    localStorage.setItem(
+      DISPLAY_SETTINGS_KEY,
+      JSON.stringify(displaySettings)
+    );
+  }, [displaySettings]);
 
   useEffect(() => {
     fetch('/api/interfaces')
@@ -141,7 +185,10 @@ function App() {
   useEffect(() => {
     if (interfaces.length === 0) return;
     if (!selected || !interfaces.includes(selected)) {
-      setSelected(interfaces[0]);
+      const storedInterface = localStorage.getItem(LAST_INTERFACE_KEY);
+      setSelected(storedInterface && interfaces.includes(storedInterface)
+        ? storedInterface
+        : interfaces[0]);
     }
   }, [interfaces, selected]);
 
@@ -234,6 +281,11 @@ function App() {
     ? traffic.fiveminute.slice(-10).reverse()
     : [];
 
+  const hourlyEstimate = hourly.length > 0 ? calculateTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
+  const dailyEstimate = daily.length > 0 ? calculateTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
+  const monthlyEstimate = monthly.length > 0 ? calculateTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
+  const yearlyEstimate = yearly.length > 0 ? calculateTrafficEstimate(yearly[0], 'year', ifaceInfo) : null;
+
   const getLabel = (row, type) => {
     if (type === 'hourly') {
       const date = new Date(row.date.year, row.date.month - 1, row.date.day, row.time.hour);
@@ -274,6 +326,108 @@ function App() {
       tab === "Monthly" ? [...filteredMonthly].reverse() :
         tab === "Yearly" ? [...filteredYearly].reverse() : [];
 
+  const graphData = (rows, type, estimate) => rows.map((row, index) => {
+    const isEstimateTarget = estimate && index === rows.length - 1;
+
+    return {
+      name: getLabel(row, type),
+      RX: row.rx ? row.rx : 0,
+      TX: row.tx ? row.tx : 0,
+      Total: row.rx && row.tx ? row.rx + row.tx : 0,
+      estimateRX: isEstimateTarget ? estimate.rx : null,
+      estimateTX: isEstimateTarget ? estimate.tx : null,
+      estimateTotal: isEstimateTarget ? estimate.total : null,
+    };
+  });
+
+  const graphSeries = [
+    {
+      dataKey: 'RX',
+      enabled: displaySettings.graphSeries.rx,
+      stroke: '#10B981',
+      strokeWidth: 3,
+      dot: { fill: '#10B981', strokeWidth: 2, r: 4 },
+      activeDot: { r: 6, stroke: '#10B981', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'TX',
+      enabled: displaySettings.graphSeries.tx,
+      stroke: '#3B82F6',
+      strokeWidth: 3,
+      dot: { fill: '#3B82F6', strokeWidth: 2, r: 4 },
+      activeDot: { r: 6, stroke: '#3B82F6', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'Total',
+      enabled: displaySettings.graphSeries.total,
+      stroke: '#F97316',
+      strokeWidth: 3,
+      dot: { fill: '#F97316', strokeWidth: 2, r: 4 },
+      activeDot: { r: 6, stroke: '#F97316', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'estimateRX',
+      enabled: estimatesEnabled && displaySettings.graphSeries.estimateRx,
+      stroke: '#F59E0B',
+      strokeWidth: 0,
+      dot: (props) => (
+        <EstimateDot
+          {...props}
+          fill="#F59E0B"
+          stroke="#FDE68A"
+          r={6}
+        />
+      ),
+      activeDot: { r: 8, stroke: '#FDE68A', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'estimateTX',
+      enabled: estimatesEnabled && displaySettings.graphSeries.estimateTx,
+      stroke: '#C084FC',
+      strokeWidth: 0,
+      dot: (props) => (
+        <EstimateDot
+          {...props}
+          fill="#C084FC"
+          stroke="#E9D5FF"
+          r={6}
+        />
+      ),
+      activeDot: { r: 8, stroke: '#E9D5FF', strokeWidth: 2 },
+    },
+    {
+      dataKey: 'estimateTotal',
+      enabled: estimatesEnabled && displaySettings.graphSeries.estimateTotal,
+      stroke: '#FACC15',
+      strokeWidth: 0,
+      dot: (props) => (
+        <EstimateDot
+          {...props}
+          fill="#FACC15"
+          stroke="#FEF3C7"
+          r={7}
+        />
+      ),
+      activeDot: { r: 9, stroke: '#FEF3C7', strokeWidth: 2 },
+    },
+  ];
+
+  const getChartRows = () => {
+    if (tab === 'Hourly') return [...hourly.slice(-24)].reverse();
+    if (tab === 'Daily') return [...daily].reverse();
+    if (tab === 'Monthly') return [...monthly].reverse();
+    if (tab === 'Yearly') return [...yearly].reverse();
+    return [];
+  };
+
+  const getChartEstimate = () => {
+    if (tab === 'Hourly') return hourlyEstimate;
+    if (tab === 'Daily') return dailyEstimate;
+    if (tab === 'Monthly') return monthlyEstimate;
+    if (tab === 'Yearly') return yearlyEstimate;
+    return null;
+  };
+
   const currentGraphData = tabData.map(row => ({
     name: getLabel(row, tab.toLowerCase()),
     RX: row.rx || 0,
@@ -300,17 +454,42 @@ function App() {
     (tab === 'Yearly' && yearly.length <= 1);
 
   const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
+    const visiblePayload = payload
+      ? payload.filter(entry => entry.value !== null && entry.value !== undefined)
+      : [];
+    const labelMap = {
+      estimateRX: 'RX Estimate',
+      estimateTX: 'TX Estimate',
+      estimateTotal: 'Total Estimate',
+    };
+    const colorMap = {
+      RX: '#10B981',
+      TX: '#3B82F6',
+      Total: '#F97316',
+      estimateRX: '#F59E0B',
+      estimateTX: '#C084FC',
+      estimateTotal: '#FACC15',
+    };
+
+
+
+    if (active && visiblePayload.length) {
       return (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
           <p className="text-gray-300 text-sm mb-2">{label}</p>
-          {payload.map((entry, index) => (
+          {visiblePayload.map((entry, index) => (
             <div key={index} className="flex items-center gap-2 text-sm">
               <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: entry.color }}
+                aria-hidden="true"
+                style={{
+                  width: '0.75rem',
+                  height: '0.75rem',
+                  borderRadius: '9999px',
+                  backgroundColor: colorMap[entry.dataKey] || entry.color,
+                  flexShrink: 0,
+                }}
               />
-              <span className="text-gray-300">{entry.dataKey}:</span>
+              <span className="text-gray-300">{labelMap[entry.dataKey] || entry.dataKey}:</span>
               <span className="text-white font-medium">{formatBytes(entry.value)}</span>
             </div>
           ))}
@@ -319,6 +498,8 @@ function App() {
     }
     return null;
   };
+
+
 
   return (
     <div className="min-h-screen bg-gray-950 text-white mb-8">
@@ -330,74 +511,44 @@ function App() {
           </h1>
           <p className="text-gray-400">Monitor your network interface statistics in real-time</p>
         </div>
-        <div class="github">
-          <a class="github-icon" href="https://github.com/Kshitiz-b/vnstat-dashboard" target="_blank" rel="noreferrer">
-            <Github class="h-5 w-5" />
+        <div className="mb-4 github">
+          <a className="github-icon" href="https://github.com/Kshitiz-b/vnstat-dashboard" target="_blank" rel="noreferrer">
+            <Github className="h-5 w-5" />
             <span>Kshitiz-b</span>
           </a>
 
+          <button
+            onClick={() => setSettingsOpen(prev => !prev)}
+            className={`settings-button ${settingsOpen ? "settings-button-active" : ""
+              }`}
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Interface + View Controls */}
-        <div className="mb-8 flex justify-center w-full">
-          <div className="flex items-center justify-center gap-4 border border-gray-700 rounded-lg bg-gray-900 px-3 py-1">
+        <SettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
 
-            {/* Interface Section */}
-            <div className="flex items-center gap-3 px-5 py-3">
-              <Network className="h-4 w-4 text-gray-500 shrink-0" />
-              <span className="text-[11px] uppercase tracking-wider font-medium text-gray-500 whitespace-nowrap">
-                Interface
-              </span>
-              {ifaceLoading ? (
-                <span className="text-gray-400 text-sm">Loading…</span>
-              ) : (
-                <select
-                  value={selected}
-                  onChange={e => setSelected(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  disabled={ifaceLoading || interfaces.length === 0}
-                >
-                  {interfaces.length > 0 ? (
-                    interfaces.map(iface => (
-                      <option key={iface} value={iface}>{iface}</option>
-                    ))
-                  ) : (
-                    <option disabled>No interfaces found</option>
-                  )}
-                </select>
-              )}
-            </div>
+          selected={selected}
+          setSelected={setSelected}
 
-            {/* View Section */}
-            <div className="flex items-center gap-3 px-5 py-3">
-              <Clock className="h-4 w-4 text-gray-500 shrink-0" />
-              <span className="text-[11px] uppercase tracking-wider font-medium text-gray-500 whitespace-nowrap">
-                View
-              </span>
-              <select
-                value={config.mode}
-                onChange={e => setConfig(prev => ({ ...prev, mode: e.target.value }))}
-                className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="last">Last view</option>
-                <option value="fixed">Fixed view</option>
-              </select>
+          interfaces={interfaces}
+          ifaceLoading={ifaceLoading}
 
-              {config.mode === 'fixed' && (
-                <select
-                  value={config.defaultTab}
-                  onChange={e => setConfig(prev => ({ ...prev, defaultTab: e.target.value }))}
-                  className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {TABS.map(t => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+          config={config}
+          setConfig={setConfig}
 
-          </div>
-        </div>
+          displaySettings={displaySettings}
+          setDisplaySettings={setDisplaySettings}
+
+          estimatesEnabled={estimatesEnabled}
+          updateGraphSeries={updateGraphSeries}
+
+          tabs={TABS}
+        />
 
         {/* Tab Navigation */}
         <div className="mb-8">
@@ -445,51 +596,81 @@ function App() {
                 </h2>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Download className="h-5 w-5 text-green-400" />
-                      <span className="text-sm text-gray-400">Total Received</span>
-                    </div>
-                    <div className="text-2xl font-bold text-green-400">
-                      {formatBytes(traffic.total.rx)}
+                <div className="overview-grid grid grid-cols-1 xl:grid-cols-2 gap-4 mb-8 items-stretch">
+                  <div className="overview-card bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div className="traffic-overview-layout grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+                      <div className="overview-subcard traffic-total-card bg-gray-900 rounded-md p-5 border border-gray-700 flex flex-col justify-center">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Activity className="h-5 w-5 text-orange-400 shrink-0" />
+                          <span className="text-sm font-medium text-gray-400">Total Traffic</span>
+                        </div>
+                        <div className="overview-total-value text-4xl font-bold text-orange-400 leading-tight text-right">
+                          {formatBytes((traffic.total.rx || 0) + (traffic.total.tx || 0))}
+                        </div>
+                      </div>
+
+                      <div className="traffic-detail-stack grid grid-rows-2 gap-4 h-full">
+                        <div className="overview-subcard traffic-detail-card bg-gray-900 rounded-md p-4 border border-gray-700 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Download className="h-5 w-5 text-green-400 shrink-0" />
+                            <span className="text-sm font-medium text-gray-400">Received</span>
+                          </div>
+                          <div className="overview-detail-value text-xl font-bold text-green-400 leading-tight text-right">{formatBytes(traffic.total.rx)}</div>
+                        </div>
+
+                        <div className="overview-subcard traffic-detail-card bg-gray-900 rounded-md p-4 border border-gray-700 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Upload className="h-5 w-5 text-blue-400 shrink-0" />
+                            <span className="text-sm font-medium text-gray-400">Sent</span>
+                          </div>
+                          <div className="overview-detail-value text-xl font-bold text-blue-400 leading-tight text-right">{formatBytes(traffic.total.tx)}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Upload className="h-5 w-5 text-blue-400" />
-                      <span className="text-sm text-gray-400">Total Sent</span>
-                    </div>
-                    <div className="text-2xl font-bold text-blue-400">
-                      {formatBytes(traffic.total.tx)}
-                    </div>
-                  </div>
+                  <div className="overview-card bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div className="time-overview-layout grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+                      <div className="overview-subcard time-detail-card bg-gray-900 rounded-md p-4 border border-gray-700">
+                        <div className="flex items-center gap-3 mb-4">
+                          <Calendar className="h-5 w-5 text-purple-400 shrink-0" />
+                          <span className="text-sm font-medium text-gray-400">Created</span>
+                        </div>
+                        <div className="overview-date-value text-lg font-semibold text-purple-400 leading-snug">
+                          {formatDate(ifaceInfo.created.date)}
+                        </div>
+                      </div>
 
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Calendar className="h-5 w-5 text-purple-400" />
-                      <span className="text-sm text-gray-400">Created</span>
-                    </div>
-                    <div className="text-lg font-semibold text-purple-400">
-                      {formatDate(ifaceInfo.created.date)}
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Clock className="h-5 w-5 text-orange-400" />
-                      <span className="text-sm text-gray-400">Last Updated</span>
-                    </div>
-                    <div className="text-lg font-semibold text-orange-400">
-                      {formatDate(ifaceInfo.updated.date)}
-                    </div>
-                    <div className="text-sm text-gray-400">
-                      {formatTime(ifaceInfo.updated.time)}
+                      <div className="overview-subcard time-detail-card bg-gray-900 rounded-md p-4 border border-gray-700">
+                        <div className="flex items-center gap-3 mb-4">
+                          <Clock className="h-5 w-5 text-blue-400 shrink-0" />
+                          <span className="text-sm font-medium text-gray-400">Last Updated</span>
+                        </div>
+                        <div className="overview-date-value text-lg font-semibold text-blue-400 leading-snug">
+                          {formatDate(ifaceInfo.updated.date)}
+                        </div>
+                        <div className="text-sm text-gray-400 mt-1">
+                          {formatTime(ifaceInfo.updated.time)}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              {estimatesEnabled && (dailyEstimate || monthlyEstimate || yearlyEstimate) && (
+                <div className="mb-8">
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-orange-400" />
+                    Estimated Usage
+                  </h3>
+                  <div className="estimate-grid">
+                    <EstimateCard title="Today" estimate={dailyEstimate} />
+                    <EstimateCard title="This Month" estimate={monthlyEstimate} accent="text-purple-400" />
+                    <EstimateCard title="This Year" estimate={yearlyEstimate} accent="text-orange-400" />
+                  </div>
+                </div>
+              )}
 
               {/* Recent Traffic Table */}
               <div>
@@ -515,6 +696,12 @@ function App() {
                             <span className="label-text">Sent</span>
                           </div>
                         </th>
+                        <th className="text-left p-4 font-medium text-gray-300 border-b border-gray-700">
+                          <div className="flex items-center gap-2">
+                            <Activity className="h-4 w-4 text-orange-400" />
+                            <span className="label-text">Total</span>
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -531,6 +718,9 @@ function App() {
                           </td>
                           <td className="p-4 border-b border-gray-800 font-medium text-blue-400">
                             {formatBytes(row.tx)}
+                          </td>
+                          <td className="p-4 border-b border-gray-800 font-medium text-orange-400">
+                            {formatBytes((row.rx || 0) + (row.tx || 0))}
                           </td>
                         </tr>
                       ))}
@@ -650,7 +840,7 @@ function App() {
               <div className={`bg-gray-800 rounded-lg p-6 border border-gray-700${dragVisualFrom != null ? ' select-none' : ''}`}>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart
-                    data={currentGraphData}
+                    data={graphData(tabData, tab.toLowerCase(), getChartEstimate())}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                     onMouseDown={(e) => {
                       if (!isFilterDisabled && e?.activeTooltipIndex != null && currentGraphData.length > 0) {
@@ -683,22 +873,21 @@ function App() {
                       width={80}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="RX"
-                      stroke="#10B981"
-                      strokeWidth={3}
-                      dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, stroke: '#10B981', strokeWidth: 2 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="TX"
-                      stroke="#3B82F6"
-                      strokeWidth={3}
-                      dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
-                    />
+                    {graphSeries
+                      .filter(series => series.enabled)
+                      .map(series => (
+                        <Line
+                          key={series.dataKey}
+                          type="monotone"
+                          dataKey={series.dataKey}
+                          stroke={series.stroke}
+                          strokeWidth={series.strokeWidth}
+                          dot={series.dot}
+                          activeDot={series.activeDot}
+                          animationDuration={1500}
+                          animationEasing="ease-out"
+                        />
+                      ))}
                     {refAreaFrom && refAreaTo && (
                       <ReferenceArea
                         x1={refAreaFrom}
@@ -726,6 +915,16 @@ function App() {
                       <span className="text-sm text-gray-400 mb-1">Upload:</span>
                       <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
                     </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((daily[0].rx || 0) + (daily[0].tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && dailyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400 mb-1">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -796,6 +995,16 @@ function App() {
                         </div>
                       </div>
                     )}
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((monthly[0].rx || 0) + (monthly[0].tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && monthlyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(monthlyEstimate.total)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -829,6 +1038,16 @@ function App() {
                             <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
                           </div>
                         </div>
+                      </div>
+                    )}
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((yearly[0].rx || 0) + (yearly[0].tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && yearlyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(yearlyEstimate.total)}</span>
                       </div>
                     )}
                   </div>
