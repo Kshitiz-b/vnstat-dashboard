@@ -140,6 +140,20 @@ function App() {
   const dragRef = useRef({ from: null, to: null });
   const chartDataRef = useRef([]);
 
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('vnstat_theme') || 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+    }
+    localStorage.setItem('vnstat_theme', theme);
+  }, [theme]);
+
   // Persist config
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
@@ -516,6 +530,15 @@ function App() {
     return null;
   };
 
+  const isDark = theme === 'dark';
+  const chartColors = {
+    grid: isDark ? '#374151' : '#e5e7eb',
+    axis: isDark ? '#9CA3AF' : '#6b7280',
+    rx: '#10B981',
+    tx: '#3B82F6',
+    refFill: '#3b82f6',
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-white mb-8">
       <div className="container mx-auto px-4 py-8 max-w-xl w-full">
@@ -563,6 +586,9 @@ function App() {
           updateGraphSeries={updateGraphSeries}
 
           tabs={TABS}
+
+          theme={theme}
+          setTheme={setTheme}
         />
 
         {/* Tab Navigation */}
@@ -887,16 +913,16 @@ function App() {
                     }}
                   >
 
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
                     <XAxis
                       dataKey="name"
-                      stroke="#9CA3AF"
+                      stroke={chartColors.axis}
                       fontSize={12}
                       tickLine={false}
                     />
                     <YAxis
                       tickFormatter={formatBytes}
-                      stroke="#9CA3AF"
+                      stroke={chartColors.axis}
                       fontSize={12}
                       tickLine={false}
                       width={80}
@@ -921,9 +947,9 @@ function App() {
                       <ReferenceArea
                         x1={refAreaFrom}
                         x2={refAreaTo}
-                        fill="#3b82f6"
+                        fill={chartColors.refFill}
                         fillOpacity={0.15}
-                        stroke="#3b82f6"
+                        stroke={chartColors.refFill}
                         strokeOpacity={0.3}
                       />
                     )}
