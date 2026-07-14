@@ -931,33 +931,50 @@ function App() {
 
               {tab === 'Daily' && daily.length > 0 && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <div className="flex flex-col sm:flex-row gap-6">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-semibold mb-2 text-blue-400">Today's Usage</h4>
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                          <span className="text-sm text-gray-400 mb-1">Download:</span>
-                          <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(daily[0].rx)}</span>
-                        </div>
-                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                          <span className="text-sm text-gray-400 mb-1">Upload:</span>
-                          <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(daily[0].tx)}</span>
-                        </div>
-                      </div>
+                  <h4 className="text-lg font-semibold mb-2 text-blue-400">Today's Usage</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(daily[0].rx)}</span>
                     </div>
-                    {hasActiveFilter && (
-                      <div className="flex-1 range-total-divider">
-                        <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                            <span className="text-sm text-gray-400 mb-1">Download:</span>
-                            <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
-                          </div>
-                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                            <span className="text-sm text-gray-400 mb-1">Upload:</span>
-                            <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
-                          </div>
-                        </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(daily[0].tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((daily[0].rx || 0) + (daily[0].tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && dailyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400 mb-1">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'Daily' && hasActiveFilter && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && dailyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400 mb-1">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
                       </div>
                     )}
                   </div>
@@ -966,35 +983,16 @@ function App() {
 
               {tab === 'Monthly' && monthly.length > 0 && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <div className="flex flex-col sm:flex-row gap-6">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-semibold mb-2 text-blue-400">This Month's Usage</h4>
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                          <span className="text-sm text-gray-400">Download:</span>
-                          <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(monthly[0].rx)}</span>
-                        </div>
-                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                          <span className="text-sm text-gray-400">Upload:</span>
-                          <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(monthly[0].tx)}</span>
-                        </div>
-                      </div>
+                  <h4 className="text-lg font-semibold mb-2 text-blue-400">This Month's Usage</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(monthly[0].rx)}</span>
                     </div>
-                    {hasActiveFilter && (
-                      <div className="flex-1 range-total-divider">
-                        <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                            <span className="text-sm text-gray-400">Download:</span>
-                            <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
-                          </div>
-                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                            <span className="text-sm text-gray-400">Upload:</span>
-                            <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(monthly[0].tx)}</span>
+                    </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400">Total:</span>
                       <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((monthly[0].rx || 0) + (monthly[0].tx || 0))}</span>
@@ -1009,40 +1007,73 @@ function App() {
                 </div>
               )}
 
-              {tab === 'Yearly' && yearly.length > 0 && (
+              {tab === 'Monthly' && hasActiveFilter && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <div className="flex flex-col sm:flex-row gap-6">
-                    <div className="flex-1">
-                      <h4 className="text-lg font-semibold mb-2 text-blue-400">This Year's Usage</h4>
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                          <span className="text-sm text-gray-400">Download:</span>
-                          <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(yearly[0].rx)}</span>
-                        </div>
-                        <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                          <span className="text-sm text-gray-400">Upload:</span>
-                          <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(yearly[0].tx)}</span>
-                        </div>
-                      </div>
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
                     </div>
-                    {hasActiveFilter && (
-                      <div className="flex-1 range-total-divider">
-                        <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                            <span className="text-sm text-gray-400">Download:</span>
-                            <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
-                          </div>
-                          <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                            <span className="text-sm text-gray-400">Upload:</span>
-                            <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
-                          </div>
-                        </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && monthlyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(monthlyEstimate.total)}</span>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'Yearly' && yearly.length > 0 && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-blue-400">This Year's Usage</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(yearly[0].rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(yearly[0].tx)}</span>
+                    </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400">Total:</span>
                       <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((yearly[0].rx || 0) + (yearly[0].tx || 0))}</span>
+                    </div>
+                    {estimatesEnabled && yearlyEstimate && (
+                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                        <span className="text-sm text-gray-400">Estimate:</span>
+                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(yearlyEstimate.total)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'Yearly' && hasActiveFilter && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
                     </div>
                     {estimatesEnabled && yearlyEstimate && (
                       <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
