@@ -1,43 +1,62 @@
-import { Clock, Calendar, Download, Upload, BarChart, LineChart, Activity } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, Calendar, Download, Upload, BarChart, LineChart, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 
-const TrafficTable = ({ title, icon, data, headers }) => (
-  <div>
-    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-      {icon}
-      {title}
-    </h3>
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="bg-gray-800">
-            {headers.map((header, i) => (
-              <th key={i} className="text-left p-4 font-medium text-gray-300 border-b border-gray-700">
-                <div className="flex items-center gap-2">
-                  {header.icon}
-                  <span className="label-text">{header.label}</span>
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row, i) => (
-            <tr key={i} className="hover:bg-gray-800 transition-colors">
-              {headers.map((header, j) => (
-                <td
-                  key={j}
-                  className={`p-4 border-b border-gray-800 text-gray-300 ${header.className || ''}`.trim()}
-                >
-                  {header.render(row)}
-                </td>
+const TrafficTable = ({ title, icon, data, headers, initialCount }) => {
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = initialCount && data.length > initialCount;
+  const visibleData = hasMore && !expanded ? data.slice(0, initialCount) : data;
+
+  return (
+    <div>
+      <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+        {icon}
+        {title}
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-800">
+              {headers.map((header, i) => (
+                <th key={i} className="text-left p-4 font-medium text-gray-300 border-b border-gray-700">
+                  <div className="flex items-center gap-2">
+                    {header.icon}
+                    <span className="label-text">{header.label}</span>
+                  </div>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleData.map((row, i) => (
+              <tr key={i} className="hover:bg-gray-800 transition-colors">
+                {headers.map((header, j) => (
+                  <td
+                    key={j}
+                    className={`p-4 border-b border-gray-800 text-gray-300 ${header.className || ''}`.trim()}
+                  >
+                    {header.render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="mt-3 table-expand-btn"
+        >
+          {expanded ? (
+            <>Show less <ChevronUp className="inline h-3.5 w-3.5" /></>
+          ) : (
+            <>Show all {data.length} entries <ChevronDown className="inline h-3.5 w-3.5" /></>
+          )}
+        </button>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const formatBytes = (bytes) => {
   if (!bytes || bytes === 0) return '0 B';
@@ -115,6 +134,7 @@ const DailyTable = ({ data }) => (
     title="Daily Traffic"
     icon={<Calendar className="h-5 w-5 text-green-400" />}
     data={data}
+    initialCount={10}
     headers={[
       { label: 'Date',
           render: (row) =>
@@ -150,6 +170,7 @@ const MonthlyTable = ({ data }) => (
     title="Monthly Traffic"
     icon={<BarChart className="h-5 w-5 text-purple-400" />}
     data={data}
+    initialCount={10}
     headers={[
       { label: 'Month', render: (row) =>
             new Date(row.date.year, row.date.month - 1).toLocaleDateString('en-US', {

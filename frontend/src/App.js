@@ -217,7 +217,6 @@ function App() {
         const endRow = data[i2];
         if (startRow && endRow) {
           const tabKey = tab.toLowerCase();
-          const pad = (n) => String(n).padStart(2, '0');
           const toISO = (date, time) => {
             if (tabKey === 'hourly')
               return `${date.year}-${pad(date.month)}-${pad(date.day)}T${pad(time?.hour || 0)}:${pad(time?.minute || 0)}`;
@@ -281,6 +280,31 @@ function App() {
     ? traffic.fiveminute.slice(-10).reverse()
     : [];
 
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const toLocalDatetime = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const toLocalDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const toLocalMonth = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+
+  const filterBounds = {
+    hourly: hourly.length > 0 ? {
+      min: toLocalDatetime(new Date(hourly[hourly.length - 1].date.year, hourly[hourly.length - 1].date.month - 1, hourly[hourly.length - 1].date.day, hourly[hourly.length - 1].time?.hour || 0)),
+      max: toLocalDatetime(new Date(Math.min(new Date(hourly[0].date.year, hourly[0].date.month - 1, hourly[0].date.day, hourly[0].time?.hour || 0).getTime(), now.getTime())))
+    } : null,
+    daily: daily.length > 0 ? {
+      min: toLocalDate(new Date(daily[daily.length - 1].date.year, daily[daily.length - 1].date.month - 1, daily[daily.length - 1].date.day)),
+      max: toLocalDate(new Date(Math.min(new Date(daily[0].date.year, daily[0].date.month - 1, daily[0].date.day).getTime(), now.getTime())))
+    } : null,
+    monthly: monthly.length > 0 ? {
+      min: toLocalMonth(new Date(monthly[monthly.length - 1].date.year, monthly[monthly.length - 1].date.month - 1, 1)),
+      max: toLocalMonth(new Date(Math.min(new Date(monthly[0].date.year, monthly[0].date.month - 1, 1).getTime(), now.getTime())))
+    } : null,
+    yearly: yearly.length > 0 ? {
+      min: Math.min(...yearly.map(r => r.date.year)),
+      max: Math.min(Math.max(...yearly.map(r => r.date.year)), now.getFullYear())
+    } : null
+  };
+
   const hourlyEstimate = hourly.length > 0 ? calculateTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
   const dailyEstimate = daily.length > 0 ? calculateTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
   const monthlyEstimate = monthly.length > 0 ? calculateTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
@@ -322,8 +346,8 @@ function App() {
   const hasActiveFilter = !!(dateRanges[tab.toLowerCase()]?.from || dateRanges[tab.toLowerCase()]?.to);
 
   const tabData = tab === "Hourly" ? [...filteredHourly.slice(-24)].reverse() :
-    tab === "Daily" ? [...filteredDaily].reverse() :
-      tab === "Monthly" ? [...filteredMonthly].reverse() :
+    tab === "Daily" ? [...(hasActiveFilter ? filteredDaily : filteredDaily.slice(0, 31))].reverse() :
+      tab === "Monthly" ? [...(hasActiveFilter ? filteredMonthly : filteredMonthly.slice(0, 12))].reverse() :
         tab === "Yearly" ? [...filteredYearly].reverse() : [];
 
   const graphData = (rows, type, estimate) => rows.map((row, index) => {
@@ -421,6 +445,7 @@ function App() {
   };
 
   const getChartEstimate = () => {
+    if (hasActiveFilter) return null;
     if (tab === 'Hourly') return hourlyEstimate;
     if (tab === 'Daily') return dailyEstimate;
     if (tab === 'Monthly') return monthlyEstimate;
@@ -744,6 +769,8 @@ function App() {
                       type="datetime-local"
                       className="date-range-input"
                       value={dateRanges.hourly?.from || ''}
+                      min={filterBounds.hourly?.min}
+                      max={filterBounds.hourly?.max}
                       disabled={isFilterDisabled}
                       onChange={(e) => setDateRanges(prev => ({ ...prev, hourly: { ...prev.hourly, from: e.target.value } }))}
                     />
@@ -752,6 +779,8 @@ function App() {
                       type="datetime-local"
                       className="date-range-input"
                       value={dateRanges.hourly?.to || ''}
+                      min={filterBounds.hourly?.min}
+                      max={filterBounds.hourly?.max}
                       disabled={isFilterDisabled}
                       onChange={(e) => setDateRanges(prev => ({ ...prev, hourly: { ...prev.hourly, to: e.target.value } }))}
                     />
@@ -762,6 +791,8 @@ function App() {
                       type="month"
                       className="date-range-input"
                       value={dateRanges.monthly?.from || ''}
+                      min={filterBounds.monthly?.min}
+                      max={filterBounds.monthly?.max}
                       disabled={isFilterDisabled}
                       onChange={(e) => setDateRanges(prev => ({ ...prev, monthly: { ...prev.monthly, from: e.target.value } }))}
                     />
@@ -770,6 +801,8 @@ function App() {
                       type="month"
                       className="date-range-input"
                       value={dateRanges.monthly?.to || ''}
+                      min={filterBounds.monthly?.min}
+                      max={filterBounds.monthly?.max}
                       disabled={isFilterDisabled}
                       onChange={(e) => setDateRanges(prev => ({ ...prev, monthly: { ...prev.monthly, to: e.target.value } }))}
                     />
@@ -780,8 +813,8 @@ function App() {
                       type="number"
                       className="date-range-input date-range-year"
                       value={dateRanges.yearly?.from || ''}
-                      min={yearly.length > 0 ? Math.min(...yearly.map(r => r.date.year)) : 2000}
-                      max={yearly.length > 0 ? Math.max(...yearly.map(r => r.date.year)) : new Date().getFullYear()}
+                      min={filterBounds.yearly?.min}
+                      max={filterBounds.yearly?.max}
                       disabled={isFilterDisabled}
                       placeholder="From"
                       onChange={(e) => setDateRanges(prev => ({ ...prev, yearly: { ...prev.yearly, from: e.target.value } }))}
@@ -791,8 +824,8 @@ function App() {
                       type="number"
                       className="date-range-input date-range-year"
                       value={dateRanges.yearly?.to || ''}
-                      min={yearly.length > 0 ? Math.min(...yearly.map(r => r.date.year)) : 2000}
-                      max={yearly.length > 0 ? Math.max(...yearly.map(r => r.date.year)) : new Date().getFullYear()}
+                      min={filterBounds.yearly?.min}
+                      max={filterBounds.yearly?.max}
                       disabled={isFilterDisabled}
                       placeholder="To"
                       onChange={(e) => setDateRanges(prev => ({ ...prev, yearly: { ...prev.yearly, to: e.target.value } }))}
@@ -804,6 +837,8 @@ function App() {
                       type="date"
                       className="date-range-input"
                       value={dateRanges.daily?.from || ''}
+                      min={filterBounds.daily?.min}
+                      max={filterBounds.daily?.max}
                       disabled={isFilterDisabled}
                       onChange={(e) => setDateRanges(prev => ({ ...prev, daily: { ...prev.daily, from: e.target.value } }))}
                     />
@@ -812,6 +847,8 @@ function App() {
                       type="date"
                       className="date-range-input"
                       value={dateRanges.daily?.to || ''}
+                      min={filterBounds.daily?.min}
+                      max={filterBounds.daily?.max}
                       disabled={isFilterDisabled}
                       onChange={(e) => setDateRanges(prev => ({ ...prev, daily: { ...prev.daily, to: e.target.value } }))}
                     />
@@ -917,14 +954,8 @@ function App() {
                     </div>
                     <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
                       <span className="text-sm text-gray-400 mb-1">Total:</span>
-                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((daily[0].rx || 0) + (daily[0].tx || 0))}</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
                     </div>
-                    {estimatesEnabled && dailyEstimate && (
-                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                        <span className="text-sm text-gray-400 mb-1">Estimate:</span>
-                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -971,12 +1002,6 @@ function App() {
                       <span className="text-sm text-gray-400 mb-1">Total:</span>
                       <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
                     </div>
-                    {estimatesEnabled && dailyEstimate && (
-                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                        <span className="text-sm text-gray-400 mb-1">Estimate:</span>
-                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1023,12 +1048,6 @@ function App() {
                       <span className="text-sm text-gray-400">Total:</span>
                       <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
                     </div>
-                    {estimatesEnabled && monthlyEstimate && (
-                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                        <span className="text-sm text-gray-400">Estimate:</span>
-                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(monthlyEstimate.total)}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1075,12 +1094,6 @@ function App() {
                       <span className="text-sm text-gray-400">Total:</span>
                       <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
                     </div>
-                    {estimatesEnabled && yearlyEstimate && (
-                      <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
-                        <span className="text-sm text-gray-400">Estimate:</span>
-                        <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(yearlyEstimate.total)}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
