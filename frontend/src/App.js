@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceArea
 } from 'recharts';
 import { Settings, Activity, Calendar, Clock, TrendingUp, Download, Upload, Server, Github } from 'lucide-react';
 import { HourlyTable, DailyTable, MonthlyTable, YearlyTable } from './components/TrafficTable';
@@ -10,6 +10,32 @@ import EstimateDot from './components/EstimateDot';
 import SettingsModal from './components/SettingsModal';
 import { calculateTrafficEstimate } from './utils/trafficEstimate';
 import { formatDate, formatTime, formatBytes, formatMonthYear } from './utils/format';
+
+function parseDateStr(str, isEnd) {
+  if (!str) return null;
+  if (str.includes('T')) return new Date(str);
+  if (/^\d{4}$/.test(str)) {
+    const y = parseInt(str);
+    return isEnd ? new Date(y, 12, 0, 23, 59, 59) : new Date(y, 0, 1);
+  }
+  if (/^\d{4}-\d{2}$/.test(str)) {
+    const [y, m] = str.split('-').map(Number);
+    return isEnd ? new Date(y, m, 0, 23, 59, 59) : new Date(y, m - 1, 1);
+  }
+  return isEnd ? new Date(str + 'T23:59:59') : new Date(str + 'T00:00:00');
+}
+
+function filterByDateRange(data, range, getEntryDate) {
+  if (!range || (!range.from && !range.to)) return data;
+  const fromDate = parseDateStr(range.from, false);
+  const toDate = parseDateStr(range.to, true);
+  return data.filter(row => {
+    const d = getEntryDate(row);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  });
+}
 
 const TABS = [
   { id: 'Summary', label: 'Summary', icon: Activity },
@@ -97,6 +123,17 @@ function App() {
   const estimatesEnabled = displaySettings.showEstimates;
 
 
+  const [dateRanges, setDateRanges] = useState({
+    hourly: { from: '', to: '' },
+    daily: { from: '', to: '' },
+    monthly: { from: '', to: '' },
+    yearly: { from: '', to: '' },
+  });
+  const [dragVisualFrom, setDragVisualFrom] = useState(null);
+  const [dragVisualTo, setDragVisualTo] = useState(null);
+  const dragRef = useRef({ from: null, to: null });
+  const chartDataRef = useRef([]);
+
   // Persist config
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
@@ -169,6 +206,43 @@ function App() {
 
   }, [selected]);
 
+  useEffect(() => {
+    const handleUp = () => {
+      const { from, to } = dragRef.current;
+      if (from != null && to != null && from !== to) {
+        const data = chartDataRef.current;
+        const i1 = Math.min(from, to);
+        const i2 = Math.max(from, to);
+        const startRow = data[i1];
+        const endRow = data[i2];
+        if (startRow && endRow) {
+          const tabKey = tab.toLowerCase();
+          const toISO = (date, time) => {
+            if (tabKey === 'hourly')
+              return `${date.year}-${pad(date.month)}-${pad(date.day)}T${pad(time?.hour || 0)}:${pad(time?.minute || 0)}`;
+            if (tabKey === 'monthly')
+              return `${date.year}-${pad(date.month)}`;
+            if (tabKey === 'yearly')
+              return `${date.year}`;
+            return `${date.year}-${pad(date.month)}-${pad(date.day)}`;
+          };
+          setDateRanges(prev => ({
+            ...prev,
+            [tabKey]: {
+              from: toISO(startRow._date, startRow._time),
+              to: toISO(endRow._date, endRow._time),
+            }
+          }));
+        }
+      }
+      dragRef.current = { from: null, to: null };
+      setDragVisualFrom(null);
+      setDragVisualTo(null);
+    };
+    window.addEventListener('mouseup', handleUp);
+    return () => window.removeEventListener('mouseup', handleUp);
+  }, [tab]);
+
   const ifaceInfo = data && data.interfaces ? data.interfaces[0] : null;
   const traffic = ifaceInfo ? ifaceInfo.traffic : null;
   const hourly = traffic && traffic.hour
@@ -206,6 +280,31 @@ function App() {
     ? traffic.fiveminute.slice(-10).reverse()
     : [];
 
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const toLocalDatetime = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const toLocalDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const toLocalMonth = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+
+  const filterBounds = {
+    hourly: hourly.length > 0 ? {
+      min: toLocalDatetime(new Date(hourly[hourly.length - 1].date.year, hourly[hourly.length - 1].date.month - 1, hourly[hourly.length - 1].date.day, hourly[hourly.length - 1].time?.hour || 0)),
+      max: toLocalDatetime(new Date(Math.min(new Date(hourly[0].date.year, hourly[0].date.month - 1, hourly[0].date.day, hourly[0].time?.hour || 0).getTime(), now.getTime())))
+    } : null,
+    daily: daily.length > 0 ? {
+      min: toLocalDate(new Date(daily[daily.length - 1].date.year, daily[daily.length - 1].date.month - 1, daily[daily.length - 1].date.day)),
+      max: toLocalDate(new Date(Math.min(new Date(daily[0].date.year, daily[0].date.month - 1, daily[0].date.day).getTime(), now.getTime())))
+    } : null,
+    monthly: monthly.length > 0 ? {
+      min: toLocalMonth(new Date(monthly[monthly.length - 1].date.year, monthly[monthly.length - 1].date.month - 1, 1)),
+      max: toLocalMonth(new Date(Math.min(new Date(monthly[0].date.year, monthly[0].date.month - 1, 1).getTime(), now.getTime())))
+    } : null,
+    yearly: yearly.length > 0 ? {
+      min: Math.min(...yearly.map(r => r.date.year)),
+      max: Math.min(Math.max(...yearly.map(r => r.date.year)), now.getFullYear())
+    } : null
+  };
+
   const hourlyEstimate = hourly.length > 0 ? calculateTrafficEstimate(hourly[0], 'hour', ifaceInfo) : null;
   const dailyEstimate = daily.length > 0 ? calculateTrafficEstimate(daily[0], 'day', ifaceInfo) : null;
   const monthlyEstimate = monthly.length > 0 ? calculateTrafficEstimate(monthly[0], 'month', ifaceInfo) : null;
@@ -226,6 +325,30 @@ function App() {
     if (type === 'yearly') return `${row.date.year}`;
     return '';
   };
+
+  const getHourlyDate = (row) => new Date(row.date.year, row.date.month - 1, row.date.day, row.time.hour);
+  const getDailyDate = (row) => new Date(row.date.year, row.date.month - 1, row.date.day);
+  const getMonthlyDate = (row) => new Date(row.date.year, row.date.month - 1, 1);
+  const getYearlyDate = (row) => new Date(row.date.year, 0, 1);
+
+  const filteredHourly = filterByDateRange(hourly, dateRanges.hourly, getHourlyDate);
+  const filteredDaily = filterByDateRange(daily, dateRanges.daily, getDailyDate);
+  const filteredMonthly = filterByDateRange(monthly, dateRanges.monthly, getMonthlyDate);
+  const filteredYearly = filterByDateRange(yearly, dateRanges.yearly, getYearlyDate);
+
+  const currentFiltered = tab === 'Hourly' ? filteredHourly :
+    tab === 'Daily' ? filteredDaily :
+      tab === 'Monthly' ? filteredMonthly :
+        tab === 'Yearly' ? filteredYearly : [];
+  const currentRangeTotal = currentFiltered.reduce((a, r) => ({
+    rx: a.rx + (r.rx || 0), tx: a.tx + (r.tx || 0)
+  }), { rx: 0, tx: 0 });
+  const hasActiveFilter = !!(dateRanges[tab.toLowerCase()]?.from || dateRanges[tab.toLowerCase()]?.to);
+
+  const tabData = tab === "Hourly" ? [...filteredHourly.slice(-24)].reverse() :
+    tab === "Daily" ? [...(hasActiveFilter ? filteredDaily : filteredDaily.slice(0, 31))].reverse() :
+      tab === "Monthly" ? [...(hasActiveFilter ? filteredMonthly : filteredMonthly.slice(0, 12))].reverse() :
+        tab === "Yearly" ? [...filteredYearly].reverse() : [];
 
   const graphData = (rows, type, estimate) => rows.map((row, index) => {
     const isEstimateTarget = estimate && index === rows.length - 1;
@@ -322,12 +445,38 @@ function App() {
   };
 
   const getChartEstimate = () => {
+    if (hasActiveFilter) return null;
     if (tab === 'Hourly') return hourlyEstimate;
     if (tab === 'Daily') return dailyEstimate;
     if (tab === 'Monthly') return monthlyEstimate;
     if (tab === 'Yearly') return yearlyEstimate;
     return null;
   };
+
+  const currentGraphData = tabData.map(row => ({
+    name: getLabel(row, tab.toLowerCase()),
+    RX: row.rx || 0,
+    TX: row.tx || 0,
+    _date: row.date,
+    _time: row.time,
+  }));
+
+  useEffect(() => {
+    chartDataRef.current = currentGraphData;
+  }, [currentGraphData]);
+
+  const refAreaFrom = dragVisualFrom != null && dragVisualTo != null && currentGraphData.length > 0
+    ? currentGraphData[Math.max(0, Math.min(dragVisualFrom, dragVisualTo))]?.name
+    : undefined;
+  const refAreaTo = dragVisualFrom != null && dragVisualTo != null && currentGraphData.length > 0
+    ? currentGraphData[Math.min(currentGraphData.length - 1, Math.max(dragVisualFrom, dragVisualTo))]?.name
+    : undefined;
+
+  const isFilterDisabled =
+    (tab === 'Hourly' && hourly.length <= 1) ||
+    (tab === 'Daily' && daily.length <= 1) ||
+    (tab === 'Monthly' && monthly.length <= 1) ||
+    (tab === 'Yearly' && yearly.length <= 1);
 
   const CustomTooltip = ({ active, payload, label }) => {
     const visiblePayload = payload
@@ -611,15 +760,139 @@ function App() {
                 <TrendingUp className="h-6 w-6 text-blue-400" />
                 {tab} Traffic Analysis
               </h2>
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+
+              <div className={`date-range-bar${isFilterDisabled ? ' disabled' : ''}`}>
+                <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                {tab === 'Hourly' ? (
+                  <>
+                    <input
+                      type="datetime-local"
+                      className="date-range-input"
+                      value={dateRanges.hourly?.from || ''}
+                      min={filterBounds.hourly?.min}
+                      max={filterBounds.hourly?.max}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, hourly: { ...prev.hourly, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="datetime-local"
+                      className="date-range-input"
+                      value={dateRanges.hourly?.to || ''}
+                      min={filterBounds.hourly?.min}
+                      max={filterBounds.hourly?.max}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, hourly: { ...prev.hourly, to: e.target.value } }))}
+                    />
+                  </>
+                ) : tab === 'Monthly' ? (
+                  <>
+                    <input
+                      type="month"
+                      className="date-range-input"
+                      value={dateRanges.monthly?.from || ''}
+                      min={filterBounds.monthly?.min}
+                      max={filterBounds.monthly?.max}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, monthly: { ...prev.monthly, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="month"
+                      className="date-range-input"
+                      value={dateRanges.monthly?.to || ''}
+                      min={filterBounds.monthly?.min}
+                      max={filterBounds.monthly?.max}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, monthly: { ...prev.monthly, to: e.target.value } }))}
+                    />
+                  </>
+                ) : tab === 'Yearly' ? (
+                  <>
+                    <input
+                      type="number"
+                      className="date-range-input date-range-year"
+                      value={dateRanges.yearly?.from || ''}
+                      min={filterBounds.yearly?.min}
+                      max={filterBounds.yearly?.max}
+                      disabled={isFilterDisabled}
+                      placeholder="From"
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, yearly: { ...prev.yearly, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="number"
+                      className="date-range-input date-range-year"
+                      value={dateRanges.yearly?.to || ''}
+                      min={filterBounds.yearly?.min}
+                      max={filterBounds.yearly?.max}
+                      disabled={isFilterDisabled}
+                      placeholder="To"
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, yearly: { ...prev.yearly, to: e.target.value } }))}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="date"
+                      className="date-range-input"
+                      value={dateRanges.daily?.from || ''}
+                      min={filterBounds.daily?.min}
+                      max={filterBounds.daily?.max}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, daily: { ...prev.daily, from: e.target.value } }))}
+                    />
+                    <span className="date-range-separator">&mdash;</span>
+                    <input
+                      type="date"
+                      className="date-range-input"
+                      value={dateRanges.daily?.to || ''}
+                      min={filterBounds.daily?.min}
+                      max={filterBounds.daily?.max}
+                      disabled={isFilterDisabled}
+                      onChange={(e) => setDateRanges(prev => ({ ...prev, daily: { ...prev.daily, to: e.target.value } }))}
+                    />
+                  </>
+                )}
+                {isFilterDisabled ? (
+                  <span className="date-range-hint">Not enough data to filter</span>
+                ) : (
+                  <button
+                    className="date-range-btn date-range-btn-reset"
+                    onClick={() => {
+                      setDateRanges(prev => ({
+                        ...prev,
+                        [tab.toLowerCase()]: { from: '', to: '' }
+                      }));
+                      dragRef.current = { from: null, to: null };
+                      setDragVisualFrom(null);
+                      setDragVisualTo(null);
+                    }}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <div className={`bg-gray-800 rounded-lg p-6 border border-gray-700${dragVisualFrom != null ? ' select-none' : ''}`}>
                 <ResponsiveContainer width="100%" height={400}>
                   <LineChart
-                    data={graphData(
-                      getChartRows(),
-                      tab.toLowerCase(),
-                      getChartEstimate()
-                    )}
+                    data={graphData(tabData, tab.toLowerCase(), getChartEstimate())}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    onMouseDown={(e) => {
+                      if (!isFilterDisabled && e?.activeTooltipIndex != null && currentGraphData.length > 0) {
+                        dragRef.current.from = e.activeTooltipIndex;
+                        dragRef.current.to = e.activeTooltipIndex;
+                        setDragVisualFrom(e.activeTooltipIndex);
+                        setDragVisualTo(e.activeTooltipIndex);
+                      }
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isFilterDisabled && dragRef.current.from != null && e?.activeTooltipIndex != null) {
+                        dragRef.current.to = e.activeTooltipIndex;
+                        setDragVisualTo(e.activeTooltipIndex);
+                      }
+                    }}
                   >
 
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -652,11 +925,41 @@ function App() {
                           animationEasing="ease-out"
                         />
                       ))}
+                    {refAreaFrom && refAreaTo && (
+                      <ReferenceArea
+                        x1={refAreaFrom}
+                        x2={refAreaTo}
+                        fill="#3b82f6"
+                        fillOpacity={0.15}
+                        stroke="#3b82f6"
+                        strokeOpacity={0.3}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
               {/* Summary Stats */}
+              {tab === 'Hourly' && hasActiveFilter && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {tab === 'Daily' && daily.length > 0 && (
                 <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
                   <h4 className="text-lg font-semibold mb-2 text-blue-400">Today's Usage</h4>
@@ -679,6 +982,26 @@ function App() {
                         <span className="text-xl font-bold text-yellow-400 ml-2">{formatBytes(dailyEstimate.total)}</span>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'Daily' && hasActiveFilter && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400 mb-1">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -706,7 +1029,26 @@ function App() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
 
+              {tab === 'Monthly' && hasActiveFilter && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -735,11 +1077,31 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {tab === 'Yearly' && hasActiveFilter && (
+                <div className="mt-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h4 className="text-lg font-semibold mb-2 text-purple-400">Range Total</h4>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Download:</span>
+                      <span className="text-xl font-bold text-green-400 ml-2">{formatBytes(currentRangeTotal.rx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Upload:</span>
+                      <span className="text-xl font-bold text-blue-400 ml-2">{formatBytes(currentRangeTotal.tx)}</span>
+                    </div>
+                    <div className="flex flex-col bg-gray-900 rounded-md p-4 border border-gray-700 min-w-[120px] items-center">
+                      <span className="text-sm text-gray-400">Total:</span>
+                      <span className="text-xl font-bold text-orange-400 ml-2">{formatBytes((currentRangeTotal.rx || 0) + (currentRangeTotal.tx || 0))}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div>
-                {tab === 'Hourly' && <HourlyTable data={hourly} />}
-                {tab === 'Daily' && <DailyTable data={daily} />}
-                {tab === 'Monthly' && <MonthlyTable data={monthly} />}
-                {tab === 'Yearly' && <YearlyTable data={yearly} />}
+                {tab === 'Hourly' && <HourlyTable data={filteredHourly} />}
+                {tab === 'Daily' && <DailyTable data={filteredDaily} />}
+                {tab === 'Monthly' && <MonthlyTable data={filteredMonthly} />}
+                {tab === 'Yearly' && <YearlyTable data={filteredYearly} />}
               </div>
             </div>
           )}
