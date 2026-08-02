@@ -435,14 +435,6 @@ function App() {
     },
   ];
 
-  const getChartRows = () => {
-    if (tab === 'Hourly') return [...hourly.slice(-24)].reverse();
-    if (tab === 'Daily') return [...daily].reverse();
-    if (tab === 'Monthly') return [...monthly].reverse();
-    if (tab === 'Yearly') return [...yearly].reverse();
-    return [];
-  };
-
   const getChartEstimate = () => {
     if (hasActiveFilter) return null;
     if (tab === 'Hourly') return hourlyEstimate;
@@ -495,8 +487,6 @@ function App() {
       estimateTotal: '#FACC15',
     };
 
-
-
     if (active && visiblePayload.length) {
       return (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
@@ -522,8 +512,6 @@ function App() {
     }
     return null;
   };
-
-
 
   return (
     <div className="min-h-screen bg-gray-950 text-white mb-8">
