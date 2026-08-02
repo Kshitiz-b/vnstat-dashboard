@@ -9,7 +9,7 @@ import EstimateCard from './components/EstimateCard';
 import EstimateDot from './components/EstimateDot';
 import SettingsModal from './components/SettingsModal';
 import { calculateTrafficEstimate } from './utils/trafficEstimate';
-import { formatDate, formatTime, formatBytes, formatMonthYear } from './utils/format';
+import { formatBytes } from './utils/format';
 import { fetchTimezone, toDateFromVnstat } from './utils/timezone';
 
 const DATE_MED = { month: 'short', day: '2-digit', year: 'numeric' };
@@ -288,16 +288,16 @@ function App() {
 
   const filterBounds = {
     hourly: hourly.length > 0 ? {
-      min: toLocalDatetime(new Date(hourly[hourly.length - 1].date.year, hourly[hourly.length - 1].date.month - 1, hourly[hourly.length - 1].date.day, hourly[hourly.length - 1].time?.hour || 0)),
-      max: toLocalDatetime(new Date(Math.min(new Date(hourly[0].date.year, hourly[0].date.month - 1, hourly[0].date.day, hourly[0].time?.hour || 0).getTime(), now.getTime())))
+      min: toLocalDatetime(toDateFromVnstat(hourly[hourly.length - 1].date, hourly[hourly.length - 1].time)),
+      max: toLocalDatetime(new Date(Math.min(toDateFromVnstat(hourly[0].date, hourly[0].time).getTime(), now.getTime())))
     } : null,
     daily: daily.length > 0 ? {
-      min: toLocalDate(new Date(daily[daily.length - 1].date.year, daily[daily.length - 1].date.month - 1, daily[daily.length - 1].date.day)),
-      max: toLocalDate(new Date(Math.min(new Date(daily[0].date.year, daily[0].date.month - 1, daily[0].date.day).getTime(), now.getTime())))
+      min: toLocalDate(toDateFromVnstat(daily[daily.length - 1].date, daily[daily.length - 1].time)),
+      max: toLocalDate(new Date(Math.min(toDateFromVnstat(daily[0].date, daily[0].time).getTime(), now.getTime())))
     } : null,
     monthly: monthly.length > 0 ? {
-      min: toLocalMonth(new Date(monthly[monthly.length - 1].date.year, monthly[monthly.length - 1].date.month - 1, 1)),
-      max: toLocalMonth(new Date(Math.min(new Date(monthly[0].date.year, monthly[0].date.month - 1, 1).getTime(), now.getTime())))
+      min: toLocalMonth(toDateFromVnstat(monthly[monthly.length - 1].date, monthly[monthly.length - 1].time)),
+      max: toLocalMonth(new Date(Math.min(toDateFromVnstat(monthly[0].date, monthly[0].time).getTime(), now.getTime())))
     } : null,
     yearly: yearly.length > 0 ? {
       min: Math.min(...yearly.map(r => r.date.year)),
