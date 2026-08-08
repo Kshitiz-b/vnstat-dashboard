@@ -3,6 +3,8 @@ services:
     image: kshitizb/vnstat-dashboard:latest
     network_mode: host
     privileged: true
+    environment:
+      - TZ=UTC  # Set to your timezone, e.g. Europe/Monaco, Asia/Almaty
     volumes:
       - /var/lib/vnstat:/var/lib/vnstat:ro
     restart: unless-stopped

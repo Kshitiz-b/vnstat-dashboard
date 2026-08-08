@@ -74,6 +74,14 @@ app.get('/api/vnstat/:iface', (req, res) => {
   });
 });
 
+const TIMEZONE = process.env.TZ
+  || Intl.DateTimeFormat().resolvedOptions().timeZone
+  || 'UTC';
+
+app.get('/api/config', (_req, res) => {
+  res.json({ timezone: TIMEZONE });
+});
+
 // Heath Check
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 

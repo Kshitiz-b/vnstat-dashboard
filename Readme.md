@@ -78,6 +78,8 @@ services:
     image: kshitizb/vnstat-dashboard:latest
     network_mode: host
     privileged: true
+    environment:
+      - TZ=UTC  # Set to your timezone, e.g. Europe/Monaco
     volumes:
       - /var/lib/vnstat:/var/lib/vnstat:ro
     restart: unless-stopped
@@ -99,6 +101,7 @@ docker compose up -d
 | `FRONTEND_DIR` | Path to built frontend | `frontend-build` |
 | `ALLOWED_PREFIXES` | Comma-separated list of allowed interface prefixes | `eth,enp,wlan,wlp,tailscale,docker` |
 | `ALLOWED_INTERFACES` | Explicit interface names (overrides prefix detection) | *(none)* |
+| `TZ` | Container timezone in IANA format (e.g. `Europe/Monaco`, `Asia/Almaty`). Auto-detected from host if not set | auto-detected / `UTC` |
 
 ---
 
