@@ -125,6 +125,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [interfaces, setInterfaces] = useState([]);
   const [ifaceLoading, setIfaceLoading] = useState(true);
+  const [sourceTZ, setSourceTZ] = useState(null);
   const estimatesEnabled = displaySettings.showEstimates;
 
 
@@ -175,7 +176,9 @@ function App() {
     );
   }, [displaySettings]);
 
-  useEffect(() => { fetchTimezone(); }, []);
+  useEffect(() => {
+    fetchTimezone().then(setSourceTZ);
+  }, []);
 
   useEffect(() => {
     fetch('/api/interfaces')
@@ -200,7 +203,7 @@ function App() {
   }, [interfaces, selected]);
 
   useEffect(() => {
-    if (!selected) return;
+    if (sourceTZ == null || !selected) return;
     setLoading(true);
     fetch(`/api/vnstat/${selected}`)
       .then(res => res.json())
@@ -211,7 +214,7 @@ function App() {
       })
       .finally(() => setLoading(false));
 
-  }, [selected]);
+  }, [selected, sourceTZ]);
 
   useEffect(() => {
     const handleUp = () => {

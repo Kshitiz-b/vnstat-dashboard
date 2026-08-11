@@ -8,9 +8,6 @@ export async function fetchTimezone() {
   } catch {
     _sourceTZ = 'UTC';
   }
-}
-
-export function getSourceTZ() {
   return _sourceTZ;
 }
 
@@ -18,7 +15,9 @@ export function toDateFromVnstat({ year, month, day }, time) {
   const hour = time?.hour ?? 0;
   const minute = time?.minute ?? 0;
   const pad = n => String(n).padStart(2, '0');
-  const iso = `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00`;
+  const m = month ?? 1;
+  const d = day ?? 1;
+  const iso = `${year}-${pad(m)}-${pad(d)}T${pad(hour)}:${pad(minute)}:00`;
   const refUTC = new Date(iso + 'Z');
 
   if (!_sourceTZ || _sourceTZ === 'UTC' || _sourceTZ === 'Etc/UTC') return refUTC;
