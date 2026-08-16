@@ -52,8 +52,37 @@ const ALLOWED_SET = new Set(ALLOWED_INTERFACES);
 const FRONTEND_DIR = process.env.FRONTEND_DIR || 'frontend-build';
 app.use(express.static(path.join(__dirname, '..', FRONTEND_DIR)));
 
+function getAliasMap(interfaces) {
+  const map = {};
+
+  try {
+    const out = execSync('vnstat --json', { encoding: 'utf8' });
+    const data = JSON.parse(out);
+
+    (data.interfaces || []).forEach(iface => {
+      if (interfaces.includes(iface.name)) {
+        map[iface.name] =
+          iface.alias && iface.alias !== iface.name
+            ? iface.alias
+            : null;
+      }
+    });
+  } catch (e) {
+    console.warn('⚠️ Could not read interface aliases:', e.message);
+  }
+
+  return map;
+}
+
+const ALIAS_MAP = getAliasMap(ALLOWED_INTERFACES);
+
 app.get('/api/interfaces', (_req, res) => {
-  res.json({ interfaces: ALLOWED_INTERFACES });
+  res.json({
+    interfaces: ALLOWED_INTERFACES.map(id => ({
+      id,
+      alias: ALIAS_MAP[id] || null,
+    })),
+  });
 });
 
 app.get('/api/vnstat/:iface', (req, res) => {
