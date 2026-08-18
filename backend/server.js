@@ -3,6 +3,13 @@ const { exec, execSync } = require('child_process');
 const path = require('path');
 const app = express();
 
+// Timezone used for vnStat calls. vnStat renders its JSON timestamps in
+// the local timezone of the process, so we force it (via env) to match the
+// timezone reported by /api/config.
+const TIMEZONE = process.env.TZ
+  || Intl.DateTimeFormat().resolvedOptions().timeZone
+  || 'UTC';
+
 // ----- Dynamic interface allowlist -----
 const ALLOWED_PREFIXES = (process.env.ALLOWED_PREFIXES || 'eth,enp,wlan,wlp,tailscale,docker')
   .split(',')
@@ -61,7 +68,7 @@ app.get('/api/vnstat/:iface', (req, res) => {
   if (!ALLOWED_SET.has(iface)) {
     return res.status(400).json({ error: 'Invalid interface' });
   }
-  exec(`vnstat -i ${iface} --json`, (error, stdout, stderr) => {
+  exec(`vnstat -i ${iface} --json`, { env: { ...process.env, TZ: TIMEZONE } }, (error, stdout, stderr) => {
     if (error) {
       return res.status(500).json({ error: stderr || error.message });
     }
@@ -73,10 +80,6 @@ app.get('/api/vnstat/:iface', (req, res) => {
     }
   });
 });
-
-const TIMEZONE = process.env.TZ
-  || Intl.DateTimeFormat().resolvedOptions().timeZone
-  || 'UTC';
 
 app.get('/api/config', (_req, res) => {
   res.json({ timezone: TIMEZONE });
