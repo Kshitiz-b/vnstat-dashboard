@@ -9,7 +9,12 @@ import EstimateCard from './components/EstimateCard';
 import EstimateDot from './components/EstimateDot';
 import SettingsModal from './components/SettingsModal';
 import { calculateTrafficEstimate } from './utils/trafficEstimate';
-import { formatDate, formatTime, formatBytes, formatMonthYear } from './utils/format';
+import { formatBytes } from './utils/format';
+import { fetchTimezone, toDateFromVnstat } from './utils/timezone';
+
+const DATE_MED = { month: 'short', day: '2-digit', year: 'numeric' };
+const TIME_12 = { hour: '2-digit', minute: '2-digit', hour12: true };
+
 
 function parseDateStr(str, isEnd) {
   if (!str) return null;
@@ -120,6 +125,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [interfaces, setInterfaces] = useState([]);
   const [ifaceLoading, setIfaceLoading] = useState(true);
+  const [sourceTZ, setSourceTZ] = useState(null);
   const estimatesEnabled = displaySettings.showEstimates;
 
 
@@ -171,6 +177,10 @@ function App() {
   }, [displaySettings]);
 
   useEffect(() => {
+    fetchTimezone().then(setSourceTZ);
+  }, []);
+
+  useEffect(() => {
     fetch('/api/interfaces')
       .then(res => res.json())
       .then(data => {
@@ -193,7 +203,7 @@ function App() {
   }, [interfaces, selected]);
 
   useEffect(() => {
-    if (!selected) return;
+    if (sourceTZ == null || !selected) return;
     setLoading(true);
     fetch(`/api/vnstat/${selected}`)
       .then(res => res.json())
@@ -204,7 +214,7 @@ function App() {
       })
       .finally(() => setLoading(false));
 
-  }, [selected]);
+  }, [selected, sourceTZ]);
 
   useEffect(() => {
     const handleUp = () => {
@@ -218,13 +228,18 @@ function App() {
         if (startRow && endRow) {
           const tabKey = tab.toLowerCase();
           const toISO = (date, time) => {
-            if (tabKey === 'hourly')
-              return `${date.year}-${pad(date.month)}-${pad(date.day)}T${pad(time?.hour || 0)}:${pad(time?.minute || 0)}`;
-            if (tabKey === 'monthly')
-              return `${date.year}-${pad(date.month)}`;
+            if (tabKey === 'hourly') {
+              const d = toDateFromVnstat(date, time);
+              return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            }
+            if (tabKey === 'monthly') {
+              const d = toDateFromVnstat(date, time);
+              return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+            }
             if (tabKey === 'yearly')
               return `${date.year}`;
-            return `${date.year}-${pad(date.month)}-${pad(date.day)}`;
+            const d = toDateFromVnstat(date, time);
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
           };
           setDateRanges(prev => ({
             ...prev,
@@ -248,28 +263,16 @@ function App() {
   const hourly = traffic && traffic.hour
     ? [...traffic.hour]
       .filter(row => row.time && typeof row.time.hour === 'number')
-      .sort((a, b) => {
-        const dateA = new Date(a.date.year, a.date.month - 1, a.date.day, a.time.hour);
-        const dateB = new Date(b.date.year, b.date.month - 1, b.date.day, b.time.hour);
-        return dateB - dateA;
-      })
+      .sort((a, b) => toDateFromVnstat(b.date, b.time) - toDateFromVnstat(a.date, a.time))
       .slice(0, 24)
     : [];
 
   const daily = traffic && traffic.day
-    ? [...traffic.day].sort((a, b) => {
-      const dateA = new Date(a.date.year, a.date.month - 1, a.date.day);
-      const dateB = new Date(b.date.year, b.date.month - 1, b.date.day);
-      return dateB - dateA;
-    })
+    ? [...traffic.day].sort((a, b) => toDateFromVnstat(b.date, b.time) - toDateFromVnstat(a.date, a.time))
     : [];
 
   const monthly = traffic && traffic.month
-    ? [...traffic.month].sort((a, b) => {
-      const dateA = new Date(a.date.year, a.date.month - 1);
-      const dateB = new Date(b.date.year, b.date.month - 1);
-      return dateB - dateA;
-    })
+    ? [...traffic.month].sort((a, b) => toDateFromVnstat(b.date, b.time) - toDateFromVnstat(a.date, a.time))
     : [];
 
   const yearly = traffic && traffic.year
@@ -288,16 +291,16 @@ function App() {
 
   const filterBounds = {
     hourly: hourly.length > 0 ? {
-      min: toLocalDatetime(new Date(hourly[hourly.length - 1].date.year, hourly[hourly.length - 1].date.month - 1, hourly[hourly.length - 1].date.day, hourly[hourly.length - 1].time?.hour || 0)),
-      max: toLocalDatetime(new Date(Math.min(new Date(hourly[0].date.year, hourly[0].date.month - 1, hourly[0].date.day, hourly[0].time?.hour || 0).getTime(), now.getTime())))
+      min: toLocalDatetime(toDateFromVnstat(hourly[hourly.length - 1].date, hourly[hourly.length - 1].time)),
+      max: toLocalDatetime(new Date(Math.min(toDateFromVnstat(hourly[0].date, hourly[0].time).getTime(), now.getTime())))
     } : null,
     daily: daily.length > 0 ? {
-      min: toLocalDate(new Date(daily[daily.length - 1].date.year, daily[daily.length - 1].date.month - 1, daily[daily.length - 1].date.day)),
-      max: toLocalDate(new Date(Math.min(new Date(daily[0].date.year, daily[0].date.month - 1, daily[0].date.day).getTime(), now.getTime())))
+      min: toLocalDate(toDateFromVnstat(daily[daily.length - 1].date, daily[daily.length - 1].time)),
+      max: toLocalDate(new Date(Math.min(toDateFromVnstat(daily[0].date, daily[0].time).getTime(), now.getTime())))
     } : null,
     monthly: monthly.length > 0 ? {
-      min: toLocalMonth(new Date(monthly[monthly.length - 1].date.year, monthly[monthly.length - 1].date.month - 1, 1)),
-      max: toLocalMonth(new Date(Math.min(new Date(monthly[0].date.year, monthly[0].date.month - 1, 1).getTime(), now.getTime())))
+      min: toLocalMonth(toDateFromVnstat(monthly[monthly.length - 1].date, monthly[monthly.length - 1].time)),
+      max: toLocalMonth(new Date(Math.min(toDateFromVnstat(monthly[0].date, monthly[0].time).getTime(), now.getTime())))
     } : null,
     yearly: yearly.length > 0 ? {
       min: Math.min(...yearly.map(r => r.date.year)),
@@ -312,24 +315,23 @@ function App() {
 
   const getLabel = (row, type) => {
     if (type === 'hourly') {
-      const date = new Date(row.date.year, row.date.month - 1, row.date.day, row.time.hour);
-      return date.toLocaleString('en-US', {
+      return toDateFromVnstat(row.date, row.time).toLocaleString('en-US', {
         month: 'short',
         day: '2-digit',
         hour: '2-digit',
         hour12: true
       });
     }
-    if (type === 'daily') return formatDate(row.date);
-    if (type === 'monthly') return formatMonthYear(row.date.year, row.date.month);
+    if (type === 'daily') return toDateFromVnstat(row.date, row.time).toLocaleDateString('en-US', DATE_MED);
+    if (type === 'monthly') return toDateFromVnstat(row.date, row.time).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
     if (type === 'yearly') return `${row.date.year}`;
     return '';
   };
 
-  const getHourlyDate = (row) => new Date(row.date.year, row.date.month - 1, row.date.day, row.time.hour);
-  const getDailyDate = (row) => new Date(row.date.year, row.date.month - 1, row.date.day);
-  const getMonthlyDate = (row) => new Date(row.date.year, row.date.month - 1, 1);
-  const getYearlyDate = (row) => new Date(row.date.year, 0, 1);
+  const getHourlyDate = (row) => toDateFromVnstat(row.date, row.time);
+  const getDailyDate = (row) => toDateFromVnstat(row.date, row.time);
+  const getMonthlyDate = (row) => toDateFromVnstat(row.date, row.time);
+  const getYearlyDate = (row) => toDateFromVnstat(row.date, row.time);
 
   const filteredHourly = filterByDateRange(hourly, dateRanges.hourly, getHourlyDate);
   const filteredDaily = filterByDateRange(daily, dateRanges.daily, getDailyDate);
@@ -436,14 +438,6 @@ function App() {
     },
   ];
 
-  const getChartRows = () => {
-    if (tab === 'Hourly') return [...hourly.slice(-24)].reverse();
-    if (tab === 'Daily') return [...daily].reverse();
-    if (tab === 'Monthly') return [...monthly].reverse();
-    if (tab === 'Yearly') return [...yearly].reverse();
-    return [];
-  };
-
   const getChartEstimate = () => {
     if (hasActiveFilter) return null;
     if (tab === 'Hourly') return hourlyEstimate;
@@ -496,8 +490,6 @@ function App() {
       estimateTotal: '#FACC15',
     };
 
-
-
     if (active && visiblePayload.length) {
       return (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-xl">
@@ -523,8 +515,6 @@ function App() {
     }
     return null;
   };
-
-
 
   return (
     <div className="min-h-screen bg-gray-950 text-white mb-8">
@@ -662,7 +652,7 @@ function App() {
                           <span className="text-sm font-medium text-gray-400">Created</span>
                         </div>
                         <div className="overview-date-value text-lg font-semibold text-purple-400 leading-snug">
-                          {formatDate(ifaceInfo.created.date)}
+                          {toDateFromVnstat(ifaceInfo.created.date, { hour: 0, minute: 0 }).toLocaleDateString('en-US', DATE_MED)}
                         </div>
                       </div>
 
@@ -672,10 +662,10 @@ function App() {
                           <span className="text-sm font-medium text-gray-400">Last Updated</span>
                         </div>
                         <div className="overview-date-value text-lg font-semibold text-blue-400 leading-snug">
-                          {formatDate(ifaceInfo.updated.date)}
+                          {toDateFromVnstat(ifaceInfo.updated.date, ifaceInfo.updated.time).toLocaleDateString('en-US', DATE_MED)}
                         </div>
                         <div className="text-sm text-gray-400 mt-1">
-                          {formatTime(ifaceInfo.updated.time)}
+                          {toDateFromVnstat(ifaceInfo.updated.date, ifaceInfo.updated.time).toLocaleTimeString('en-US', TIME_12)}
                         </div>
                       </div>
                     </div>
@@ -733,10 +723,10 @@ function App() {
                       {fivemin.map((row, i) => (
                         <tr key={i} className="hover:bg-gray-800 transition-colors">
                           <td className="p-4 border-b border-gray-800 text-gray-300">
-                            {formatDate(row.date)}
+                            {toDateFromVnstat(row.date, row.time).toLocaleDateString('en-US', DATE_MED)}
                           </td>
                           <td className="p-4 border-b border-gray-800 text-gray-300">
-                            {formatTime(row.time)}
+                            {toDateFromVnstat(row.date, row.time).toLocaleTimeString('en-US', TIME_12)}
                           </td>
                           <td className="p-4 border-b border-gray-800 font-medium text-green-400">
                             {formatBytes(row.rx)}

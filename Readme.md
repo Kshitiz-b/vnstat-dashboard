@@ -78,6 +78,8 @@ services:
     image: kshitizb/vnstat-dashboard:latest
     network_mode: host
     privileged: true
+    environment:
+      - TZ=UTC  # Timezone vnStat reports timestamps in, e.g. Europe/Monaco (optional)
     volumes:
       - /var/lib/vnstat:/var/lib/vnstat:ro
     restart: unless-stopped
@@ -99,6 +101,12 @@ docker compose up -d
 | `FRONTEND_DIR` | Path to built frontend | `frontend-build` |
 | `ALLOWED_PREFIXES` | Comma-separated list of allowed interface prefixes | `eth,enp,wlan,wlp,tailscale,docker` |
 | `ALLOWED_INTERFACES` | Explicit interface names (overrides prefix detection) | *(none)* |
+| `TZ` | Container timezone in IANA format (e.g. `Europe/Monaco`, `Asia/Almaty`). Auto-detected from host if not set | auto-detected / `UTC` |
+
+> **Timezone note:** `TZ` sets the zone in which **vnStat reports** its wall-clock timestamps
+> (and the zone the dashboard uses to interpret them). vnStat is invoked as a child process of the backend
+> and is always given the same `TZ` reported by `/api/config`, so the conversion is self-consistent -
+> it does **not** need to match the host's timezone. If `TZ` is unset, the container's system zone is used.
 
 ---
 
