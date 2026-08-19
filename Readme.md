@@ -16,6 +16,7 @@ A sleek, responsive, containerized web dashboard to visualize network interface 
 - Dockerized for portability
 - Uses a single container for backend + frontend
 - **Automatic Interface Detection** – no hardcoded `eth0`, `wlan0` etc.
+- **Interface Aliases** – displays vnStat interface aliases alongside their interface IDs
 - Custom interface filtering via environment variables
 - Works on ARM (Raspberry Pi) and x86 systems
 
@@ -70,7 +71,7 @@ http://localhost:8050
 
 ## 🐳 Using Docker Compose
 
-A ready-to-use `docker-compose.yml` is included:
+A ready-to-use `docker-compose.yaml` is included:
 
 ```yaml
 services:
@@ -132,8 +133,29 @@ docker compose up -d
 
 - **Frontend + API served on same port**: `8050`
 - Backend API Endpoints:
-  - `/api/interfaces` → List of available interfaces
+  - `/api/interfaces` → List of available interfaces and their vnStat aliases
   - `/api/vnstat/:interface` → Detailed JSON data for that interface
+
+### `/api/interfaces`
+
+Returns the available interfaces along with their configured vnStat aliases:
+
+```json
+{
+  "interfaces": [
+    {
+      "id": "docker0",
+      "alias": "Docker Bridge"
+    },
+    {
+      "id": "eth0",
+      "alias": null
+    }
+  ]
+}
+```
+
+Interfaces without a configured alias return `null`.
 
 ---
 
@@ -158,6 +180,24 @@ docker compose up -d
 
 - Configure detection rules in `backend/server.js`
 - Change UI/theme in `frontend/src/App.js` or TailwindCSS
+
+### Interface Aliases
+
+vnStat interface aliases can be configured using:
+
+```bash
+sudo vnstat -i <interface> --setalias "<alias>"
+```
+
+For example:
+
+```bash
+sudo vnstat -i docker0 --setalias "Docker Bridge"
+```
+
+The dashboard displays the alias alongside the underlying interface ID, for example:
+
+`Docker Bridge (docker0)`
 
 ---
 

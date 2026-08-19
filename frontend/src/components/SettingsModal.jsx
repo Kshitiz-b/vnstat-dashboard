@@ -91,7 +91,9 @@ export default function SettingsModal({
                             >
                                 {interfaces.length > 0 ? (
                                     interfaces.map(iface => (
-                                        <option key={iface} value={iface}>{iface}</option>
+                                        <option key={iface.id} value={iface.id}>
+                                            {iface.alias ? `${iface.alias} (${iface.id})` : iface.id}
+                                        </option>
                                     ))
                                 ) : (
                                     <option disabled>No interfaces found</option>

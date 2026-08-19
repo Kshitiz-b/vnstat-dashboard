@@ -194,11 +194,11 @@ function App() {
 
   useEffect(() => {
     if (interfaces.length === 0) return;
-    if (!selected || !interfaces.includes(selected)) {
+    if (!selected || !interfaces.some(iface => iface.id === selected)) {
       const storedInterface = localStorage.getItem(LAST_INTERFACE_KEY);
-      setSelected(storedInterface && interfaces.includes(storedInterface)
+      setSelected(storedInterface && interfaces.some(iface => iface.id === storedInterface)
         ? storedInterface
-        : interfaces[0]);
+        : interfaces[0]?.id);
     }
   }, [interfaces, selected]);
 
@@ -607,7 +607,9 @@ function App() {
               <div className="mb-8">
                 <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
                   <Activity className="h-6 w-6 text-blue-400" />
-                  {ifaceInfo.name} Overview
+                  {ifaceInfo.alias
+                    ? `${ifaceInfo.alias} (${ifaceInfo.name})`
+                    : ifaceInfo.name} Overview
                 </h2>
 
                 {/* Stats Grid */}
