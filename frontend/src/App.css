@@ -588,6 +588,7 @@ body.light-theme .interface-select {
 .text-yellow-400 { color: #FFEE58; }
 body.light-theme .text-yellow-400 { color: #ca8a04; }
 .hover\:bg-gray-700:hover { background-color: var(--bg-hover-strong); }
+.hover\:bg-gray-800:hover { background-color: var(--bg-hover-strong); }
 .hover\:text-white:hover { color: var(--text-primary); }
 
 /* Custom Animations */
@@ -744,16 +745,16 @@ body.light-theme .date-range-input::-webkit-calendar-picker-indicator {
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  border: 1px solid #374151;
-  background: #1f2937;
-  color: #9ca3af;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
   transition: all 0.15s;
 }
 
 .table-expand-btn:hover {
-  background: #374151;
-  color: #d1d5db;
-  border-color: #4b5563;
+  background: var(--bg-hover-strong);
+  color: var(--text-tertiary);
+  border-color: var(--border-strong);
 }
 
 .select-none {
