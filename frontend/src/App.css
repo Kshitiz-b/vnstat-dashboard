@@ -81,7 +81,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg-page) !important;
   color: var(--text-primary);
-  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .no-scrollbar {
@@ -999,6 +998,9 @@ body.light-theme .icon-muted {
   max-width: 32rem; /* max-w-lg */
   padding: 1.5rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-close-button {
@@ -1055,6 +1057,9 @@ body.light-theme .icon-muted {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 0.5rem;
 }
 
 .settings-section {
