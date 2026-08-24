@@ -28,6 +28,14 @@
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <script>
+      (function () {
+        const theme = localStorage.getItem('vnstat_theme');
+        if (theme === 'light') {
+          document.body.classList.add('light-theme');
+        }
+      })();
+    </script>
     <div id="root"></div>
     <!--
       This HTML file is a template.

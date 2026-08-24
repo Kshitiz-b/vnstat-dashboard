@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { X, Settings, Network, Clock } from "lucide-react";
+import { X, Settings, Network, Clock, Sun, Moon, Monitor } from "lucide-react";
 
 export default function SettingsModal({
     isOpen,
@@ -21,6 +21,9 @@ export default function SettingsModal({
     updateGraphSeries,
 
     tabs,
+
+    theme,
+    setTheme,
 }) {
         useEffect(() => {
         if (!isOpen) return;
@@ -229,6 +232,31 @@ export default function SettingsModal({
                                     </label>
                                 </>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Theme Section */}
+                    <div className="settings-section">
+                        <div className="settings-section-title">
+                            <Monitor className="icon icon-accent" />
+                            <h3>Theme</h3>
+                        </div>
+
+                        <div className="settings-theme-options">
+                            <button
+                                className={`settings-theme-option ${theme === 'dark' ? 'settings-theme-option-active' : ''}`}
+                                onClick={() => setTheme('dark')}
+                            >
+                                <Moon className="icon" />
+                                <span>Dark</span>
+                            </button>
+                            <button
+                                className={`settings-theme-option ${theme === 'light' ? 'settings-theme-option-active' : ''}`}
+                                onClick={() => setTheme('light')}
+                            >
+                                <Sun className="icon" />
+                                <span>Light</span>
+                            </button>
                         </div>
                     </div>
 
